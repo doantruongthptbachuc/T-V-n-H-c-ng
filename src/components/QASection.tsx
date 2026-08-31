@@ -547,6 +547,18 @@ export const QASection: React.FC<QASectionProps> = ({
                                 <p className="text-xs text-slate-500">
                                   Người gửi: <strong>{lookedUpQuestion.isAnonymous ? 'Học sinh ẩn danh' : lookedUpQuestion.studentName}</strong> • Lớp: <strong>{lookedUpQuestion.className}</strong>
                                 </p>
+                                {lookedUpQuestion.tags && lookedUpQuestion.tags.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                    {lookedUpQuestion.tags.map((tag, tIdx) => (
+                                      <span
+                                        key={tIdx}
+                                        className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/70 text-[11px] font-semibold"
+                                      >
+                                        #{tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -804,6 +816,19 @@ export const QASection: React.FC<QASectionProps> = ({
                                 <span>•</span>
                                 <span>Lớp: <strong className="text-slate-700">{item.className}</strong></span>
                               </p>
+                              {/* AI Topic & Tags */}
+                              {item.tags && item.tags.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                                  {item.tags.map((tag, tIdx) => (
+                                    <span
+                                      key={tIdx}
+                                      className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200/80 text-[11px] font-medium"
+                                    >
+                                      #{tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
 

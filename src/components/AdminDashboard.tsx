@@ -73,12 +73,14 @@ import {
   AIPromptQuestion, 
   AIChatLog,
   TopicType,
+  QuestionSeverity,
   Counselor,
   VolunteerMember,
   VolunteerAttendance,
   VolunteerStatus,
   HealthArticle
 } from '../types';
+import { analyzeQuestionWithGemini } from '../utils/questionAnalyzer';
 import { 
   generateGoogleAppsScriptCode, 
   downloadFile,
@@ -221,6 +223,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [qEditAnsweredBy, setQEditAnsweredBy] = useState('');
   const [qEditStatus, setQEditStatus] = useState<'pending' | 'answered'>('answered');
   const [qEditIsPublic, setQEditIsPublic] = useState(true);
+  const [qEditSeverity, setQEditSeverity] = useState<QuestionSeverity>('thấp');
+  const [qEditTags, setQEditTags] = useState('');
+
+  const [qSeverityFilter, setQSeverityFilter] = useState<'all' | 'cao' | 'trung bình' | 'thấp'>('all');
+  const [qTopicFilter, setQTopicFilter] = useState<string>('all');
+  const [qStatusFilter, setQStatusFilter] = useState<'all' | 'pending' | 'answered'>('all');
+  const [qSearchTerm, setQSearchTerm] = useState('');
+  const [analyzingQuestionId, setAnalyzingQuestionId] = useState<string | null>(null);
 
   const [answerText, setAnswerText] = useState('');
   const [counselorName, setCounselorName] = useState(counselors[0]?.name ? `${counselors[0].name} (${counselors[0].role})` : 'Thầy Trần Văn Được - BT Đoàn');
@@ -543,6 +553,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setQEditAnsweredBy(q.answeredBy || (counselors[0]?.name ? `${counselors[0].name} (${counselors[0].role})` : 'Tổ Tư vấn Học đường'));
     setQEditStatus(q.status || 'answered');
     setQEditIsPublic(q.isPublic !== false);
+    setQEditSeverity(q.severity || 'thấp');
+    setQEditTags(q.tags && q.tags.length > 0 ? q.tags.join(', ') : '');
   };
 
   const handleSaveEditQuestion = (e: React.FormEvent) => {
@@ -552,6 +564,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       alert('Vui lòng nhập nội dung câu hỏi!');
       return;
     }
+    const tagsArray = qEditTags
+      .split(',')
+      .map(t => t.trim())
+      .filter(Boolean);
+
     onUpdateQuestion(editingQuestion.id, {
       studentName: qEditStudentName.trim() || 'Học sinh',
       className: qEditClass.trim() || '10',
@@ -562,8 +579,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       answeredAt: qEditAnswer.trim() ? new Date().toISOString() : undefined,
       status: qEditAnswer.trim() ? qEditStatus : 'pending',
       isPublic: qEditIsPublic,
+      severity: qEditSeverity,
+      tags: tagsArray.length > 0 ? tagsArray : ['Tư vấn học đường'],
     });
     setEditingQuestion(null);
+  };
+
+  const handleReanalyzeQuestion = async (q: Question) => {
+    setAnalyzingQuestionId(q.id);
+    try {
+      const result = await analyzeQuestionWithGemini(
+        q.question,
+        q.topic,
+        q.className,
+        q.studentName,
+        q.isAnonymous
+      );
+      onUpdateQuestion(q.id, {
+        topic: result.topic,
+        tags: result.tags,
+        severity: result.severity,
+        aiAnalysis: result.aiAnalysis,
+      });
+    } catch (error) {
+      console.error('Error re-analyzing question with Gemini:', error);
+    } finally {
+      setAnalyzingQuestionId(null);
+    }
   };
 
   // Story Full Edit Handlers
@@ -2096,7 +2138,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
 
         {/* TAB 4: XỬ LÝ CÂU HỎI TƯ VẤN TỪ WEB FORM */}
-        {activeTab === 'qa' && (
+        {activeTab === 'qa' && (() => {
+          const filteredAdminQuestions = questions.filter(q => {
+            const matchesTopic = qTopicFilter === 'all' || q.topic === qTopicFilter;
+            const matchesStatus = qStatusFilter === 'all' || q.status === qStatusFilter;
+            const matchesSeverity = qSeverityFilter === 'all' || (q.severity || 'thấp') === qSeverityFilter;
+            const sLower = qSearchTerm.toLowerCase().trim();
+            const matchesSearch = !sLower ||
+              q.question.toLowerCase().includes(sLower) ||
+              (q.answer && q.answer.toLowerCase().includes(sLower)) ||
+              q.studentName.toLowerCase().includes(sLower) ||
+              q.className.toLowerCase().includes(sLower) ||
+              q.code.toLowerCase().includes(sLower) ||
+              (q.tags && q.tags.some(t => t.toLowerCase().includes(sLower)));
+
+            return matchesTopic && matchesStatus && matchesSeverity && matchesSearch;
+          });
+
+          const highSeverityCount = questions.filter(q => q.severity === 'cao').length;
+          const mediumSeverityCount = questions.filter(q => q.severity === 'trung bình').length;
+
+          return (
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
@@ -2105,7 +2167,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <span>DANH SÁCH CÂU HỎI TƯ VẤN TỪ HỌC SINH ({questions.length})</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Thầy Cô có thể chỉnh sửa nội dung câu hỏi, câu trả lời, thông tin học sinh/lớp cho phù hợp với trường Ba Chúc và tự động lưu.
+                  Tự động gắn nhãn (tag) chủ đề và đánh giá mức độ nghiêm trọng bằng Trợ lý Gemini AI ngay khi tiếp nhận.
                 </p>
               </div>
 
@@ -2129,6 +2191,75 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <Download className="w-4 h-4 text-slate-500" />
                   <span>Tải CSV Nhanh</span>
                 </button>
+              </div>
+            </div>
+
+            {/* Severity Alert Banners if high severity cases exist */}
+            {highSeverityCount > 0 && (
+              <div className="p-4 bg-rose-50 border-2 border-rose-300 rounded-2xl flex items-start space-x-3 text-rose-900 text-xs">
+                <div className="p-2 bg-rose-600 text-white rounded-xl shrink-0 mt-0.5">
+                  <ShieldAlert className="w-5 h-5 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <p className="font-extrabold text-sm text-rose-950 flex items-center space-x-2">
+                    <span>CẢNH BÁO TÂM LÝ: CÓ {highSeverityCount} CÂU HỎI MỨC ĐỘ CAO (CẦN CAN THIỆP GẤP)</span>
+                  </p>
+                  <p className="text-rose-800 leading-relaxed">
+                    Hệ thống Gemini AI đã phát hiện các câu hỏi có dấu hiệu khủng hoảng tâm lý, bế tắc hoặc áp lực trầm trọng. Thầy Cô vui lòng ưu tiên xử lý hoặc kết nối học sinh với Tổ Tư vấn qua Hotline <strong>0789 620 212</strong>.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Filter & Search Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Tìm theo nội dung, mã, tên, tag..."
+                  value={qSearchTerm}
+                  onChange={(e) => setQSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div>
+                <select
+                  value={qSeverityFilter}
+                  onChange={(e) => setQSeverityFilter(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-semibold text-slate-700"
+                >
+                  <option value="all">Mức độ nghiêm trọng: Tất cả</option>
+                  <option value="cao">🚨 Mức độ: CAO (Khẩn cấp - {highSeverityCount})</option>
+                  <option value="trung bình">⚠️ Mức độ: TRUNG BÌNH ({mediumSeverityCount})</option>
+                  <option value="thấp">🟢 Mức độ: THẤP</option>
+                </select>
+              </div>
+
+              <div>
+                <select
+                  value={qTopicFilter}
+                  onChange={(e) => setQTopicFilter(e.target.value)}
+                  className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-semibold text-slate-700"
+                >
+                  <option value="all">Chủ đề: Tất cả</option>
+                  {TOPIC_LIST.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <select
+                  value={qStatusFilter}
+                  onChange={(e) => setQStatusFilter(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-semibold text-slate-700"
+                >
+                  <option value="all">Trạng thái: Tất cả</option>
+                  <option value="pending">Chờ xử lý ({questions.filter(q => q.status === 'pending').length})</option>
+                  <option value="answered">Đã trả lời ({questions.filter(q => q.status === 'answered').length})</option>
+                </select>
               </div>
             </div>
 
@@ -2180,6 +2311,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <option key={t} value={t}>{t}</option>
                           ))}
                         </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Mức độ nghiêm trọng:</label>
+                        <select
+                          value={qEditSeverity}
+                          onChange={(e) => setQEditSeverity(e.target.value as QuestionSeverity)}
+                          className={`w-full px-3 py-2 rounded-xl border font-bold ${
+                            qEditSeverity === 'cao' ? 'bg-rose-50 border-rose-300 text-rose-700' :
+                            qEditSeverity === 'trung bình' ? 'bg-amber-50 border-amber-300 text-amber-700' :
+                            'bg-emerald-50 border-emerald-300 text-emerald-700'
+                          }`}
+                        >
+                          <option value="thấp">🟢 Thấp (Thắc mắc thường ngày)</option>
+                          <option value="trung bình">⚠️ Trung bình (Cần tư vấn sớm)</option>
+                          <option value="cao">🚨 Cao (Nguy cơ khủng hoảng / Can thiệp gấp)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Thẻ nhãn (Tags - cách nhau bởi dấu phẩy):</label>
+                        <input
+                          type="text"
+                          value={qEditTags}
+                          onChange={(e) => setQEditTags(e.target.value)}
+                          placeholder="Ví dụ: Áp lực thi cử, Mất ngủ, Khối 12"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                        />
                       </div>
                     </div>
 
@@ -2265,156 +2426,252 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
 
             <div className="space-y-4">
-              {questions.map((q) => (
-                <div
-                  key={q.id}
-                  className={`p-5 rounded-2xl border transition-all ${
-                    q.status === 'answered'
-                      ? 'bg-slate-50/70 border-slate-200'
-                      : 'bg-amber-50/60 border-amber-300 shadow-xs'
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 border-b border-slate-200/60 pb-2 mb-3">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
-                        {q.code}
-                      </span>
-                      <span className="font-semibold text-slate-800">
-                        {q.isAnonymous ? 'Học sinh ẩn danh' : q.studentName} (Lớp {q.className})
-                      </span>
-                      <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-bold rounded-md text-[10px]">
-                        {q.topic}
-                      </span>
-                    </div>
-
-                    <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
-                      q.status === 'answered'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-amber-500 text-white animate-pulse'
-                    }`}>
-                      {q.status === 'answered' ? '✓ Đã trả lời' : 'Chờ xử lý'}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 text-xs sm:text-sm">
-                    <p className="text-slate-900 font-medium leading-relaxed">
-                      <strong className="text-slate-900">Nội dung câu hỏi:</strong> {q.question}
-                    </p>
-
-                    {q.answer && (
-                      <div className="mt-3 p-3.5 bg-white rounded-xl border border-emerald-200 space-y-1.5">
-                        <div className="flex items-center justify-between text-[11px] text-emerald-800 font-bold">
-                          <span>Người trả lời: {q.answeredBy}</span>
-                          <span>{q.answeredAt ? new Date(q.answeredAt).toLocaleDateString('vi-VN') : ''}</span>
-                        </div>
-                        <p className="text-slate-700 text-xs leading-relaxed whitespace-pre-line">
-                          {q.answer}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Answering Form if expanding */}
-                    {answeringQuestionId === q.id && (
-                      <div className="mt-3 p-4 bg-indigo-50/70 rounded-2xl border border-indigo-200 space-y-3">
-                        <label className="font-bold text-xs text-indigo-900 block">
-                          Nhập câu trả lời nhanh của Thầy Cô / Chuyên gia:
-                        </label>
-                        <textarea
-                          rows={5}
-                          value={answerText}
-                          onChange={(e) => setAnswerText(e.target.value)}
-                          placeholder="Nhập lời tư vấn, động viên và hướng giải quyết gửi đến học sinh..."
-                          className="w-full p-3 text-xs bg-white rounded-xl border border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 leading-relaxed font-sans whitespace-pre-wrap break-words resize-y"
-                        />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                              Chọn Thầy/Cô phụ trách trả lời:
-                            </label>
-                            <select
-                              value={counselorName}
-                              onChange={(e) => setCounselorName(e.target.value)}
-                              className="w-full text-xs px-3 py-2 rounded-xl border border-indigo-200 bg-white"
-                            >
-                              {counselors.map((c) => (
-                                <option key={c.id} value={`${c.name} (${c.role})`}>
-                                  {c.name} - {c.role}
-                                </option>
-                              ))}
-                              <option value="Tổ Tư vấn Học đường THPT Ba Chúc">Tổ Tư vấn Học đường THPT Ba Chúc</option>
-                              <option value="Ban Chấp Hành Đoàn Trường THPT Ba Chúc">Ban Chấp Hành Đoàn Trường THPT Ba Chúc</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                              Trạng thái:
-                            </label>
-                            <select
-                              value={answerStatusChoice}
-                              onChange={(e) => setAnswerStatusChoice(e.target.value as 'answered' | 'pending')}
-                              className="w-full text-xs px-3 py-2 rounded-xl border border-indigo-200 bg-white font-semibold"
-                            >
-                              <option value="answered">Đã trả lời (Công khai lên Web)</option>
-                              <option value="pending">Bản nháp (Đang chờ)</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-end space-x-2 pt-1">
-                          <button
-                            onClick={() => setAnsweringQuestionId(null)}
-                            className="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-700"
-                          >
-                            Hủy
-                          </button>
-                          <button
-                            onClick={() => handleSaveAnswer(q.id)}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow cursor-pointer flex items-center space-x-1"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Lưu & Đăng Trả Lời</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="pt-2 flex items-center justify-end space-x-2">
-                      <button
-                        onClick={() => handleOpenEditQuestion(q)}
-                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl text-xs transition cursor-pointer flex items-center space-x-1"
-                        title="Chỉnh sửa toàn diện nội dung câu hỏi/trả lời/thông tin trường lớp"
-                      >
-                        <Settings className="w-3 h-3" />
-                        <span>Sửa toàn diện</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleOpenAnswerBox(q)}
-                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition cursor-pointer flex items-center space-x-1"
-                      >
-                        <Edit3 className="w-3 h-3" />
-                        <span>{q.status === 'answered' ? 'Sửa câu trả lời' : 'Trả lời ngay'}</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          if (confirm('Bạn có chắc chắn muốn xóa câu hỏi này?')) {
-                            onDeleteQuestion(q.id);
-                          }
-                        }}
-                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition cursor-pointer"
-                        title="Xóa câu hỏi"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
+              {filteredAdminQuestions.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 text-xs">
+                  Không tìm thấy câu hỏi nào phù hợp với bộ lọc hiện tại.
                 </div>
-              ))}
+              ) : (
+                filteredAdminQuestions.map((q) => {
+                  const severity = q.severity || 'thấp';
+                  const isHigh = severity === 'cao';
+                  const isMed = severity === 'trung bình';
+
+                  return (
+                    <div
+                      key={q.id}
+                      className={`p-5 rounded-2xl border transition-all space-y-3 ${
+                        isHigh
+                          ? 'bg-rose-50/70 border-rose-300 shadow-sm ring-1 ring-rose-200'
+                          : isMed
+                          ? 'bg-amber-50/60 border-amber-300 shadow-xs'
+                          : q.status === 'answered'
+                          ? 'bg-slate-50/70 border-slate-200'
+                          : 'bg-white border-slate-200 shadow-xs'
+                      }`}
+                    >
+                      {/* Top Header info */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 border-b border-slate-200/60 pb-2.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md font-mono">
+                            {q.code}
+                          </span>
+                          <span className="font-semibold text-slate-800">
+                            {q.isAnonymous ? 'Học sinh ẩn danh' : q.studentName} (Lớp {q.className})
+                          </span>
+                          <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-bold rounded-md text-[10px]">
+                            {q.topic}
+                          </span>
+
+                          {/* Severity Badge */}
+                          <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full font-black text-[10px] border ${
+                            isHigh
+                              ? 'bg-rose-600 text-white border-rose-700 animate-pulse shadow-xs'
+                              : isMed
+                              ? 'bg-amber-500 text-white border-amber-600 font-bold'
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          }`}>
+                            {isHigh && <ShieldAlert className="w-3 h-3 text-white" />}
+                            <span>
+                              {isHigh ? 'MỨC ĐỘ: CAO (KHẨN CẤP)' : isMed ? 'MỨC ĐỘ: TRUNG BÌNH' : 'MỨC ĐỘ: THẤP'}
+                            </span>
+                          </span>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                            q.status === 'answered'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-500 text-white animate-pulse'
+                          }`}>
+                            {q.status === 'answered' ? '✓ Đã trả lời' : 'Chờ xử lý'}
+                          </span>
+
+                          <span className="text-slate-400 text-[11px]">
+                            {new Date(q.createdAt).toLocaleDateString('vi-VN')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Question Content */}
+                      <div className="space-y-2 text-xs sm:text-sm">
+                        <p className="text-slate-900 font-medium leading-relaxed">
+                          <strong className="text-slate-900">Nội dung câu hỏi:</strong> {q.question}
+                        </p>
+
+                        {/* Tags Badges */}
+                        {q.tags && q.tags.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span className="text-[11px] font-bold text-slate-500 flex items-center space-x-1">
+                              <Sparkles className="w-3 h-3 text-indigo-500" />
+                              <span>Nhãn (Tags):</span>
+                            </span>
+                            {q.tags.map((tag, tIdx) => (
+                              <span
+                                key={tIdx}
+                                className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/70 text-[11px] font-semibold"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Gemini AI Auto-Classification Insight */}
+                        {q.aiAnalysis && (
+                          <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-200/80 text-xs space-y-1.5">
+                            <div className="flex items-center justify-between text-indigo-900 font-bold">
+                              <span className="flex items-center space-x-1.5">
+                                <Bot className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Phân tích & Đề xuất hành động từ Gemini AI</span>
+                              </span>
+                              <span className="text-[10px] text-indigo-500 font-normal">
+                                {q.aiAnalysis.isAiClassified ? 'Tự động phân loại bằng AI' : 'Thuật toán học đường'}
+                              </span>
+                            </div>
+                            {q.aiAnalysis.urgencyReason && (
+                              <p className="text-slate-700 text-[11px]">
+                                <strong className="text-indigo-900">Lý do:</strong> {q.aiAnalysis.urgencyReason}
+                              </p>
+                            )}
+                            {q.aiAnalysis.suggestedAction && (
+                              <p className="text-slate-700 text-[11px]">
+                                <strong className="text-emerald-800">Đề xuất cho Ban Tư vấn:</strong> {q.aiAnalysis.suggestedAction}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Official Answer */}
+                        {q.answer && (
+                          <div className="mt-3 p-3.5 bg-white rounded-xl border border-emerald-200 space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px] text-emerald-800 font-bold">
+                              <span>Người trả lời: {q.answeredBy}</span>
+                              <span>{q.answeredAt ? new Date(q.answeredAt).toLocaleDateString('vi-VN') : ''}</span>
+                            </div>
+                            <p className="text-slate-700 text-xs leading-relaxed whitespace-pre-line">
+                              {q.answer}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Answering Form if expanding */}
+                        {answeringQuestionId === q.id && (
+                          <div className="mt-3 p-4 bg-indigo-50/70 rounded-2xl border border-indigo-200 space-y-3">
+                            <label className="font-bold text-xs text-indigo-900 block">
+                              Nhập câu trả lời nhanh của Thầy Cô / Chuyên gia:
+                            </label>
+                            <textarea
+                              rows={5}
+                              value={answerText}
+                              onChange={(e) => setAnswerText(e.target.value)}
+                              placeholder="Nhập lời tư vấn, động viên và hướng giải quyết gửi đến học sinh..."
+                              className="w-full p-3 text-xs bg-white rounded-xl border border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 leading-relaxed font-sans whitespace-pre-wrap break-words resize-y"
+                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                  Chọn Thầy/Cô phụ trách trả lời:
+                                </label>
+                                <select
+                                  value={counselorName}
+                                  onChange={(e) => setCounselorName(e.target.value)}
+                                  className="w-full text-xs px-3 py-2 rounded-xl border border-indigo-200 bg-white"
+                                >
+                                  {counselors.map((c) => (
+                                    <option key={c.id} value={`${c.name} (${c.role})`}>
+                                      {c.name} - {c.role}
+                                    </option>
+                                  ))}
+                                  <option value="Tổ Tư vấn Học đường THPT Ba Chúc">Tổ Tư vấn Học đường THPT Ba Chúc</option>
+                                  <option value="Ban Chấp Hành Đoàn Trường THPT Ba Chúc">Ban Chấp Hành Đoàn Trường THPT Ba Chúc</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                  Trạng thái:
+                                </label>
+                                <select
+                                  value={answerStatusChoice}
+                                  onChange={(e) => setAnswerStatusChoice(e.target.value as 'answered' | 'pending')}
+                                  className="w-full text-xs px-3 py-2 rounded-xl border border-indigo-200 bg-white font-semibold"
+                                >
+                                  <option value="answered">Đã trả lời (Công khai lên Web)</option>
+                                  <option value="pending">Bản nháp (Đang chờ)</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-end space-x-2 pt-1">
+                              <button
+                                onClick={() => setAnsweringQuestionId(null)}
+                                className="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-700"
+                              >
+                                Hủy
+                              </button>
+                              <button
+                                onClick={() => handleSaveAnswer(q.id)}
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow cursor-pointer flex items-center space-x-1"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Lưu & Đăng Trả Lời</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="pt-2 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100">
+                          {/* AI Re-analyze button */}
+                          <button
+                            type="button"
+                            onClick={() => handleReanalyzeQuestion(q)}
+                            disabled={analyzingQuestionId === q.id}
+                            className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs transition cursor-pointer flex items-center space-x-1 disabled:opacity-50"
+                            title="Chạy lại phân tích gắn nhãn và đánh giá mức độ bằng Gemini AI"
+                          >
+                            <Sparkles className={`w-3 h-3 ${analyzingQuestionId === q.id ? 'animate-spin' : ''}`} />
+                            <span>{analyzingQuestionId === q.id ? 'AI đang phân tích...' : 'AI Phân tích lại'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleOpenEditQuestion(q)}
+                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl text-xs transition cursor-pointer flex items-center space-x-1"
+                            title="Chỉnh sửa toàn diện nội dung câu hỏi/trả lời/thông tin trường lớp/mức độ"
+                          >
+                            <Settings className="w-3 h-3" />
+                            <span>Sửa toàn diện</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleOpenAnswerBox(q)}
+                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition cursor-pointer flex items-center space-x-1"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            <span>{q.status === 'answered' ? 'Sửa câu trả lời' : 'Trả lời ngay'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (confirm('Bạn có chắc chắn muốn xóa câu hỏi này?')) {
+                                onDeleteQuestion(q.id);
+                              }
+                            }}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition cursor-pointer"
+                            title="Xóa câu hỏi"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* TAB: QUẢN LÝ CẨM NANG & TUYÊN TRUYỀN Y TẾ HỌC ĐƯỜNG */}
         {activeTab === 'health_articles' && (() => {

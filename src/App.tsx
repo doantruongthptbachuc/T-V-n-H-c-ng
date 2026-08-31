@@ -79,6 +79,7 @@ import {
   initPersistentMemory
 } from './utils/storage';
 import { initialHealthArticles } from './data/healthData';
+import { analyzeQuestionWithGemini } from './utils/questionAnalyzer';
 import { 
   subscribeToFirebaseConfig, 
   subscribeToFirebaseCounselors, 
@@ -326,8 +327,38 @@ export default function App() {
   const handleAddQuestion = async (
     qData: Omit<Question, 'id' | 'code' | 'createdAt' | 'status' | 'isPublic'> & { code?: string }
   ): Promise<Question> => {
+    // 1. Gọi Gemini API tự động phân tích nhãn (tags), mức độ nghiêm trọng (thấp/trung bình/cao) và tối ưu chủ đề
+    let detectedTopic = qData.topic;
+    let detectedTags: string[] = ['Tư vấn học đường'];
+    let detectedSeverity: 'thấp' | 'trung bình' | 'cao' = 'thấp';
+    let aiAnalysisData = undefined;
+
+    try {
+      const analysis = await analyzeQuestionWithGemini(
+        qData.question,
+        qData.topic,
+        qData.className,
+        qData.studentName,
+        qData.isAnonymous
+      );
+      if (analysis) {
+        detectedTags = analysis.tags || ['Tư vấn học đường'];
+        detectedSeverity = analysis.severity || 'thấp';
+        aiAnalysisData = analysis.aiAnalysis;
+        if ((!detectedTopic || detectedTopic === 'Khác') && analysis.topic) {
+          detectedTopic = analysis.topic;
+        }
+      }
+    } catch (err) {
+      console.warn('Auto classification error during handleAddQuestion:', err);
+    }
+
     const newQuestion: Question = {
       ...qData,
+      topic: detectedTopic,
+      tags: detectedTags,
+      severity: detectedSeverity,
+      aiAnalysis: aiAnalysisData,
       id: `q-${Date.now()}`,
       code: qData.code || `HD-${Math.floor(1000 + Math.random() * 9000)}`,
       createdAt: new Date().toISOString(),

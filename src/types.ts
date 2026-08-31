@@ -10,6 +10,18 @@ export type TopicType =
   | 'Tình cảm học trò'
   | 'Khác';
 
+export type QuestionSeverity = 'thấp' | 'trung bình' | 'cao';
+
+export interface QuestionAIAnalysis {
+  topicTag?: TopicType | string;
+  tags?: string[];
+  severity: QuestionSeverity;
+  urgencyReason?: string;
+  suggestedAction?: string;
+  analyzedAt: string;
+  isAiClassified?: boolean;
+}
+
 export interface Question {
   id: string;
   code: string;
@@ -26,6 +38,9 @@ export interface Question {
   answeredAt?: string;
   isPublic: boolean;
   notes?: string;
+  tags?: string[];
+  severity?: QuestionSeverity;
+  aiAnalysis?: QuestionAIAnalysis;
 }
 
 export interface Story {

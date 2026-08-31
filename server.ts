@@ -767,6 +767,178 @@ Quy tắc ứng xử và giao tiếp:
   }
 });
 
+// =========================================================================
+// API GEMINI AUTO-CLASSIFICATION & SEVERITY ASSESSMENT CHO CÂU HỎI
+// =========================================================================
+app.post("/api/analyze-question", async (req, res) => {
+  try {
+    const { question, currentTopic, className, studentName, isAnonymous } = req.body || {};
+
+    if (!question || typeof question !== "string" || question.trim().length === 0) {
+      return res.status(400).json({ error: "Nội dung câu hỏi không hợp lệ." });
+    }
+
+    const trimmedQuestion = question.trim();
+    const isCrisis = checkEmergency(trimmedQuestion);
+
+    // Heuristic Fallback Analysis Helper
+    const computeFallbackAnalysis = (text: string, userTopic?: string) => {
+      const lower = text.toLowerCase();
+      let severity: 'thấp' | 'trung bình' | 'cao' = 'thấp';
+      let topic: string = userTopic && userTopic !== 'Khác' ? userTopic : 'Tâm lý';
+      const tags: string[] = [];
+      let urgencyReason = 'Câu hỏi thông thường về học đường, không có dấu hiệu khẩn cấp.';
+      let suggestedAction = 'Thầy cô tiếp nhận và gửi câu trả lời tư vấn theo quy trình định kỳ.';
+
+      if (isCrisis || lower.includes("tự tử") || lower.includes("tự sát") || lower.includes("muốn chết") || lower.includes("cắt tay") || lower.includes("bị đánh đập") || lower.includes("xâm hại")) {
+        severity = 'cao';
+        topic = 'Tâm lý';
+        tags.push('Khẩn cấp', 'Khủng hoảng tâm lý', 'Cần can thiệp gấp');
+        urgencyReason = 'Phát hiện từ khóa nhạy cảm / nguy cơ khủng hoảng tâm lý nghiêm trọng.';
+        suggestedAction = 'Ưu tiên liên hệ trực tiếp học sinh hoặc phụ huynh, kết nối Hotline 0789 620 212 để can thiệp kịp thời.';
+      } else if (lower.includes("bạo lực") || lower.includes("tẩy chay") || lower.includes("cô lập") || lower.includes("đe dọa") || lower.includes("bắt nạt") || lower.includes("trầm cảm") || lower.includes("hoảng loạn") || lower.includes("mất ngủ kéo dài") || lower.includes("khóc suốt") || lower.includes("bế tắc")) {
+        severity = 'cao';
+        tags.push('Nguy cơ cao', 'Căng thẳng trầm trọng', 'Tâm lý học đường');
+        urgencyReason = 'Học sinh đang trải qua tình trạng ức chế cảm xúc, bị cô lập hoặc bế tắc tâm lý nặng.';
+        suggestedAction = 'Xếp vào nhóm ưu tiên can thiệp trong vòng 24 giờ, mời học sinh gặp riêng tại Phòng Tư vấn.';
+      } else if (lower.includes("áp lực") || lower.includes("mất ngủ") || lower.includes("lo âu") || lower.includes("cãi nhau") || lower.includes("mâu thuẫn") || lower.includes("sa sút") || lower.includes("rớt môn") || lower.includes("bất đồng")) {
+        severity = 'trung bình';
+        tags.push('Áp lực tâm lý', 'Cần tháo gỡ', 'Theo dõi');
+        urgencyReason = 'Học sinh gặp áp lực học tập hoặc mâu thuẫn cần sự định hướng, động viên sớm.';
+        suggestedAction = 'Gửi phản hồi hướng dẫn phương pháp giải tỏa tâm lý và phương án cân bằng thời gian.';
+      } else {
+        severity = 'thấp';
+        tags.push('Thắc mắc chung', 'Học đường');
+      }
+
+      // Keyword-based Topic Refinement if not specified
+      if (lower.includes("đại học") || lower.includes("chọn ngành") || lower.includes("chọn nghề") || lower.includes("hướng nghiệp")) {
+        topic = 'Hướng nghiệp';
+        tags.push('Hướng nghiệp', 'Chọn ngành');
+      } else if (lower.includes("đoàn") || lower.includes("tình nguyện") || lower.includes("hoa phượng đỏ") || lower.includes("clb")) {
+        topic = 'Hoạt động Đoàn';
+        tags.push('Đoàn trường', 'Phong trào');
+      } else if (lower.includes("bạn bè") || lower.includes("bạn thân") || lower.includes("nhóm bạn")) {
+        topic = 'Bạn bè';
+        tags.push('Mối quan hệ bạn bè');
+      } else if (lower.includes("ba mẹ") || lower.includes("bố mẹ") || lower.includes("gia đình") || lower.includes("phụ huynh")) {
+        topic = 'Gia đình';
+        tags.push('Quan hệ gia đình');
+      } else if (lower.includes("thích bạn") || lower.includes("tỏ tình") || lower.includes("crush") || lower.includes("người yêu")) {
+        topic = 'Tình cảm học trò';
+        tags.push('Tình cảm tuổi học trò');
+      } else if (lower.includes("học tập") || lower.includes("ôn thi") || lower.includes("điểm số") || lower.includes("môn học")) {
+        topic = 'Học tập';
+        tags.push('Phương pháp học tập');
+      }
+
+      const uniqueTags = Array.from(new Set(tags)).slice(0, 4);
+      return {
+        topic,
+        tags: uniqueTags.length > 0 ? uniqueTags : ['Tư vấn học đường'],
+        severity,
+        urgencyReason,
+        suggestedAction,
+        analyzedAt: new Date().toISOString(),
+        isAiClassified: false
+      };
+    };
+
+    // 1. Try Gemini AI for deep semantic categorization
+    const ai = getGeminiAI();
+    if (ai) {
+      const promptText = `Bạn là Chuyên gia Tâm lý & Cố vấn Học đường tại Trường THPT Ba Chúc (Việt Nam).
+Nhiệm vụ của bạn: Đọc câu hỏi/tâm sự của học sinh cấp 3 dưới đây và tự động phân loại, gắn nhãn (tags) và đánh giá mức độ nghiêm trọng.
+
+NỘI DUNG CÂU HỎI TỪ HỌC SINH:
+"${trimmedQuestion}"
+(Khối lớp: ${className || 'THPT Ba Chúc'}, Chủ đề ban đầu học sinh chọn: ${currentTopic || 'Chưa chọn'})
+
+YÊU CẦU ĐẦU RA JSON CHUẨN:
+{
+  "topic": "Một trong các chủ đề chính: 'Học tập' | 'Tâm lý' | 'Bạn bè' | 'Gia đình' | 'Hướng nghiệp' | 'Kỹ năng sống' | 'Sức khỏe học đường' | 'Hoạt động Đoàn' | 'Tình cảm học trò' | 'Khác'",
+  "tags": ["Từ 2 đến 4 thẻ nhãn ngắn gọn, súc tích bằng Tiếng Việt mô tả trọng tâm vấn đề, ví dụ: 'Áp lực thi cử', 'Mất ngủ', 'Xung đột bạn bè', 'Bạo lực học đường', 'Chọn ngành Đại học'"],
+  "severity": "Đánh giá mức độ nghiêm trọng, BẮT BUỘC chọn đúng 1 trong 3 giá trị: 'thấp' | 'trung bình' | 'cao'",
+  "urgencyReason": "Lý do ngắn gọn trong 1 câu giải thích vì sao xếp mức độ nghiêm trọng này",
+  "suggestedAction": "Đề xuất hành động thực tế 1-2 câu cho Thầy Cô Ban Tư Vấn Học Đường can thiệp hoặc giải đáp"
+}
+
+QUY TẮC PHÂN LOẠI MỨC ĐỘ NGHIÊM TRỌNG (severity):
+- 'cao': Khủng hoảng tâm lý nghiêm trọng, ý nghĩ tự hại/tự tử, bạo lực học đường/gia đình, trầm cảm nặng, bị cô lập ác ý, hoảng loạn tinh thần. Cần nhà trường can thiệp khẩn cấp.
+- 'trung bình': Lo âu kéo dài, mâu thuẫn bạn bè/gia đình căng thẳng, sa sút việc học, bế tắc chọn ngành nghề hoặc áp lực thi cử cận kề. Cần phản hồi và động viên sớm.
+- 'thấp': Các thắc mắc thường ngày về phương pháp học tập, kỹ năng sống, hoạt động Đoàn - Hội - CLB, thủ tục trường học.
+
+LƯU Ý: Chỉ trả về định dạng JSON hợp lệ, không kèm văn bản giải thích thừa.`;
+
+      const MODELS = ["gemini-3.7-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+      for (const modelName of MODELS) {
+        try {
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: promptText,
+            config: {
+              responseMimeType: "application/json",
+              temperature: 0.2,
+            },
+          });
+
+          const rawJson = response?.text?.trim();
+          if (rawJson) {
+            // Remove markdown code fences if present
+            const cleanJson = rawJson.replace(/^```json\s*/i, "").replace(/\s*```$/, "").trim();
+            const parsed = JSON.parse(cleanJson);
+
+            let severity: 'thấp' | 'trung bình' | 'cao' = 'thấp';
+            const rawSev = String(parsed.severity || '').toLowerCase().trim();
+            if (rawSev === 'cao' || rawSev === 'high' || rawSev === 'critical' || isCrisis) {
+              severity = 'cao';
+            } else if (rawSev === 'trung bình' || rawSev === 'medium' || rawSev === 'moderate') {
+              severity = 'trung bình';
+            } else {
+              severity = 'thấp';
+            }
+
+            const tags = Array.isArray(parsed.tags) && parsed.tags.length > 0
+              ? parsed.tags.map((t: any) => String(t).trim()).filter((t: string) => t.length > 0).slice(0, 4)
+              : ['Tư vấn học đường'];
+
+            const validTopics = [
+              'Học tập', 'Tâm lý', 'Bạn bè', 'Gia đình', 'Hướng nghiệp',
+              'Kỹ năng sống', 'Sức khỏe học đường', 'Hoạt động Đoàn', 'Tình cảm học trò', 'Khác'
+            ];
+            const topic = validTopics.includes(parsed.topic) ? parsed.topic : (currentTopic || 'Tâm lý');
+
+            return res.json({
+              success: true,
+              topic,
+              tags,
+              severity,
+              urgencyReason: parsed.urgencyReason || 'Đã phân tích bằng Trợ lý Gemini AI.',
+              suggestedAction: parsed.suggestedAction || 'Thầy cô xem xét và phản hồi theo quy trình tư vấn.',
+              analyzedAt: new Date().toISOString(),
+              isAiClassified: true,
+              modelUsed: modelName
+            });
+          }
+        } catch (err: any) {
+          console.warn(`Gemini analysis model ${modelName} error:`, err?.message);
+        }
+      }
+    }
+
+    // 2. Fallback heuristic classification
+    const fallback = computeFallbackAnalysis(trimmedQuestion, currentTopic);
+    res.json({
+      success: true,
+      ...fallback,
+      modelUsed: 'heuristic_fallback'
+    });
+  } catch (error: any) {
+    console.error("Analyze Question API Error:", error);
+    res.status(500).json({ error: error.message || "Lỗi khi phân tích câu hỏi" });
+  }
+});
+
 // API Proxy to test/sync Google Apps Script Web App
 app.post("/api/sync-sheets", async (req, res) => {
   try {
