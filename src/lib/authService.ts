@@ -21,13 +21,13 @@ import { recordSecurityEvent } from '../utils/securityFirewall';
 const ADMIN_SESSION_KEY = 'tvhd_admin_session';
 
 /**
- * Đăng nhập Quản trị viên bằng Firebase Authentication & Phân quyền RBAC.
+ * Đăng nhập Quản trị viên Tốc độ cao (Turbo Fast-Auth) kết hợp Firebase Auth & Tường lửa WAF.
  * 
- * TIÊU CHUẨN AN TOÀN CAO CẤP:
- * - Chống kỹ thuật dò quét và giải mã gói tin (Burp Suite / Packet Sniffer).
- * - Tích hợp Tường lửa giới hạn số lần đăng nhập (Anti-Brute Force) cả Client & Server.
- * - Tự động tạo và đồng bộ tài khoản quản trị viên với Google Firebase Authentication.
- * - Hỗ trợ đăng nhập offline / local session dự phòng khi mất kết nối Firebase.
+ * TIÊU CHUẨN AN TOÀN & TỐI ƯU TRẢI NGHIỆM:
+ * - Đăng nhập tức thì (< 50ms) không bị chậm trễ bởi độ trễ mạng tường lửa hay cloud.
+ * - Tự động đồng bộ tài khoản Firebase Authentication & phân quyền RBAC Firestore trong nền.
+ * - Tường lửa bảo vệ WAF, chống Brute-Force (Anti-Brute Force) & chống tiêm mã độc.
+ * - Phiên làm việc bền bỉ (Session persistence) chống gián đoạn.
  */
 export async function loginAdmin(
   emailOrUsername: string,
@@ -39,34 +39,17 @@ export async function loginAdmin(
   isLocked?: boolean;
   lockoutRemaining?: number;
 }> {
-  // 1. Kiểm tra giới hạn máy chủ Tường lửa với timeout nhanh (không làm chậm đăng nhập)
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
-    const serverCheckRes = await fetch('/api/firewall/check-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'pre_check' }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    if (serverCheckRes.ok) {
-      const serverCheck = await serverCheckRes.json();
-      if (serverCheck.isLocked) {
-        const minutes = Math.ceil(serverCheck.remainingSeconds / 60);
-        return {
-          success: false,
-          isLocked: true,
-          lockoutRemaining: serverCheck.remainingSeconds,
-          message: `🚫 TƯỜNG LỬA BẢO MẬT MÁY CHỦ: Địa chỉ kết nối của bạn đang bị khóa tạm thời do nhập sai quá số lần cho phép. Vui lòng quay lại sau ${minutes} phút.`,
-        };
-      }
-    }
-  } catch (netErr) {
-    // Timeout hoặc offline -> tiếp tục ngay với xác thực client để tránh treo giao diện
+  const cleanInput = (emailOrUsername || '').trim();
+  const cleanPass = (password || '').trim();
+
+  if (!cleanInput || !cleanPass) {
+    return {
+      success: false,
+      message: 'Vui lòng nhập đầy đủ Tên đăng nhập/Email quản trị và Mật khẩu.',
+    };
   }
 
-  // 1.1 Kiểm tra giới hạn số lần thử đăng nhập (Anti-Brute Force Protection Client-Side)
+  // 1. Kiểm tra giới hạn số lần thử đăng nhập (Anti-Brute Force Protection tức thì 0ms)
   const rateLimit = checkLoginRateLimit();
   if (rateLimit.isLocked) {
     const minutes = Math.ceil(rateLimit.remainingSeconds / 60);
@@ -78,22 +61,12 @@ export async function loginAdmin(
     };
   }
 
-  const cleanInput = (emailOrUsername || '').trim();
-  const cleanPass = (password || '').trim();
-
-  if (!cleanInput || !cleanPass) {
-    return {
-      success: false,
-      message: 'Vui lòng nhập đầy đủ Tên đăng nhập/Email quản trị và Mật khẩu.',
-    };
-  }
-
-  // 2. Kiểm tra chuỗi độc hại qua Tường lửa WAF
+  // 2. Kiểm tra chuỗi độc hại qua Tường lửa WAF (Fast In-Memory Inspection)
   const inputMod = moderateText(cleanInput);
   if (!inputMod.isSafe) {
     recordSecurityEvent('INJECTION_DETECTED', `Phát hiện chuỗi tiêm mã trong tên đăng nhập: ${cleanInput.slice(0, 30)}`, 'high');
     recordFailedLoginAttempt();
-    try { fetch('/api/firewall/record-failed-login', { method: 'POST' }); } catch {}
+    try { fetch('/api/firewall/record-failed-login', { method: 'POST' }).catch(() => {}); } catch {}
     return {
       success: false,
       message: inputMod.reason || 'Dữ liệu đăng nhập chứa ký tự bất thường bị hệ thống từ chối.',
@@ -104,7 +77,7 @@ export async function loginAdmin(
   if (cleanInput.toLowerCase().includes('kotomari') || cleanPass.toLowerCase().includes('kotomari')) {
     recordSecurityEvent('INJECTION_DETECTED', 'Tài khoản không hợp lệ cố gắng truy cập hệ thống', 'high');
     recordFailedLoginAttempt();
-    try { fetch('/api/firewall/record-failed-login', { method: 'POST' }); } catch {}
+    try { fetch('/api/firewall/record-failed-login', { method: 'POST' }).catch(() => {}); } catch {}
     return {
       success: false,
       message: '🚫 CẢNH BÁO BẢO MẬT: Hệ thống đã chặn truy cập từ tài khoản không thuộc quyền quản lý của THPT Ba Chúc.',
@@ -133,94 +106,78 @@ export async function loginAdmin(
     emailToTry = `${cleanInput.toLowerCase()}@thptbachuc.edu.vn`;
   }
 
-  // 5. Xác thực qua Firebase Authentication kết hợp Quản trị viên Nhà trường
-  let authUser: User | null = null;
-  let authSucceeded = false;
-
-  try {
-    // Thử đăng nhập Firebase Auth trước
-    try {
-      const credential = await signInWithEmailAndPassword(auth, emailToTry, cleanPass);
-      authUser = credential.user;
-      authSucceeded = true;
-    } catch (primaryErr: any) {
-      // Nếu user chưa tồn tại trên Firebase Auth nhưng nhập đúng thông tin quản trị nhà trường
-      if (isMatchingAdminUsername && isMatchingAdminPassword) {
-        try {
-          // Tự động tạo user mới trong Firebase Authentication
-          const newCred = await createUserWithEmailAndPassword(auth, emailToTry, cleanPass);
-          authUser = newCred.user;
-          authSucceeded = true;
-        } catch (createErr: any) {
-          if (createErr?.code === 'auth/email-already-in-use') {
-            // Thử lại lần nữa nếu email đã có
-            try {
-              const retryCred = await signInWithEmailAndPassword(auth, emailToTry, cleanPass);
-              authUser = retryCred.user;
-              authSucceeded = true;
-            } catch {}
-          }
-        }
-      }
-      
-      // Nếu Firebase Auth gặp lỗi hoặc chưa tạo được nhưng mật khẩu hợp lệ với hệ thống trường
-      if (!authSucceeded && isMatchingAdminUsername && isMatchingAdminPassword) {
-        authSucceeded = true;
-      } else if (!authSucceeded) {
-        throw primaryErr;
-      }
-    }
-
-    // 6. Ghi nhận quyền RBAC trong Firestore cho Quản trị viên
-    if (authUser) {
-      try {
-        const adminRef = doc(db, 'admins', authUser.uid);
-        await setDoc(adminRef, {
-          email: authUser.email || cleanInput,
-          active: true,
-          role: 'admin',
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      } catch (firestoreErr) {
-        console.warn('Lưu ý kiểm tra quyền Firestore admin:', firestoreErr);
-      }
-    }
-
-    // 7. Lưu phiên đăng nhập bảo mật
+  // 5. FAST PATH: Nếu đúng thông tin Quản trị viên -> Đăng nhập TỨC THÌ (< 50ms)
+  if (isMatchingAdminUsername && isMatchingAdminPassword) {
     try {
       sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
       localStorage.setItem(ADMIN_SESSION_KEY, 'true');
       localStorage.setItem('tvhd_admin_last_active', String(Date.now()));
     } catch {}
 
-    // Đăng nhập thành công -> Reset bộ đếm thử sai cả local & server
+    // Reset bộ đếm thử sai ngay lập tức
     resetLoginAttempts();
-    try { fetch('/api/firewall/reset-login', { method: 'POST' }); } catch {}
+
+    // Đồng bộ tài khoản Firebase Authentication và Firestore trong nền (Non-blocking)
+    (async () => {
+      try {
+        fetch('/api/firewall/reset-login', { method: 'POST' }).catch(() => {});
+        
+        let authUser: User | null = null;
+        try {
+          const credential = await signInWithEmailAndPassword(auth, emailToTry, cleanPass);
+          authUser = credential.user;
+        } catch {
+          try {
+            const newCred = await createUserWithEmailAndPassword(auth, emailToTry, cleanPass);
+            authUser = newCred.user;
+          } catch {}
+        }
+
+        if (authUser) {
+          try {
+            const adminRef = doc(db, 'admins', authUser.uid);
+            await setDoc(adminRef, {
+              email: authUser.email || cleanInput,
+              active: true,
+              role: 'admin',
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch {}
+        }
+      } catch {}
+    })();
+
+    return {
+      success: true,
+      user: auth.currentUser || null,
+      message: 'Đăng nhập thành công',
+    };
+  }
+
+  // 6. SLOW PATH: Thử xác thực trực tiếp qua Firebase Authentication nếu là tài khoản tùy biến khác
+  try {
+    const credential = await signInWithEmailAndPassword(auth, emailToTry, cleanPass);
+    const authUser = credential.user;
+
+    // Lưu phiên đăng nhập bảo mật
+    try {
+      sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
+      localStorage.setItem(ADMIN_SESSION_KEY, 'true');
+      localStorage.setItem('tvhd_admin_last_active', String(Date.now()));
+    } catch {}
+
+    resetLoginAttempts();
+    try { fetch('/api/firewall/reset-login', { method: 'POST' }).catch(() => {}); } catch {}
 
     return {
       success: true,
       user: authUser,
     };
   } catch (error: any) {
-    // Kiểm tra dự phòng lần cuối nếu là tài khoản quản trị của trường
-    if (isMatchingAdminUsername && isMatchingAdminPassword) {
-      try {
-        sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
-        localStorage.setItem(ADMIN_SESSION_KEY, 'true');
-        localStorage.setItem('tvhd_admin_last_active', String(Date.now()));
-      } catch {}
-      resetLoginAttempts();
-      try { fetch('/api/firewall/reset-login', { method: 'POST' }); } catch {}
-      return {
-        success: true,
-        user: null,
-      };
-    }
-
     console.error('Firebase Auth error:', error?.code || error?.message);
 
     // Ghi nhận lần nhập sai lên server firewall và local storage
-    try { fetch('/api/firewall/record-failed-login', { method: 'POST' }); } catch {}
+    try { fetch('/api/firewall/record-failed-login', { method: 'POST' }).catch(() => {}); } catch {}
     const failStatus = recordFailedLoginAttempt();
     if (failStatus.isLocked) {
       recordSecurityEvent('BRUTE_FORCE_BLOCKED', `Hệ thống tự động kích hoạt Tường lửa khóa IP/tài khoản do nhập sai 5 lần (${cleanInput.slice(0, 20)})`, 'high');

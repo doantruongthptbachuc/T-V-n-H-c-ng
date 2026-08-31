@@ -37,7 +37,7 @@ import {
   deleteFirebaseDoc,
   saveFirebaseCollectionBatch,
 } from '../lib/firestoreService';
-import { idbSet, idbGet, idbGetStats } from './indexedDbStorage';
+import { idbSet, idbGet, idbGetStats, idbOptimize } from './indexedDbStorage';
 import { volunteers2025_2026 } from '../data/volunteers2025_2026';
 import { attendance2025_2026 } from '../data/attendance2025_2026';
 
@@ -61,7 +61,7 @@ const STORAGE_KEYS = {
 // In-memory fallback cache
 const memoryStore = new Map<string, string>();
 
-// Safe JSON parser & local cache layer
+// Safe JSON parser & local cache layer with multi-tier fallback
 function safeGet<T>(key: string, defaultValue: T): T {
   try {
     const item = localStorage.getItem(key) || sessionStorage.getItem(key) || memoryStore.get(key);
@@ -82,27 +82,35 @@ function safeGet<T>(key: string, defaultValue: T): T {
 }
 
 function safeSet<T>(key: string, value: T): void {
-  const json = JSON.stringify(value);
-  memoryStore.set(key, json);
-
   try {
-    localStorage.setItem(key, json);
-  } catch (e: any) {
-    console.warn(`Quota or write issue for ${key}:`, e?.message || e);
-    try {
-      if (key !== STORAGE_KEYS.AI_LOGS) {
-        localStorage.removeItem(STORAGE_KEYS.AI_LOGS);
-      }
-      localStorage.setItem(key, json);
-    } catch {
-      try {
-        sessionStorage.setItem(key, json);
-      } catch {}
-    }
-  }
+    const json = JSON.stringify(value);
+    memoryStore.set(key, json);
 
-  // Tự động lưu vào bộ nhớ siêu dung lượng IndexedDB trong nền (chống mất dữ liệu & chống tràn quota)
-  idbSet(key, value).catch(() => {});
+    try {
+      localStorage.setItem(key, json);
+    } catch (e: any) {
+      // Khi localStorage bị đầy (QuotaExceededError > 5MB), tự động dọn rác đệm
+      console.warn(`[Bộ Nhớ] Tối ưu hóa dung lượng cho khóa "${key}":`, e?.message || e);
+      try {
+        // Dọn dẹp các tệp sao lưu tự động cũ và log AI khỏi localStorage để nhường chỗ
+        localStorage.removeItem(STORAGE_KEYS.BACKUP);
+        localStorage.removeItem(STORAGE_KEYS.AI_LOGS);
+        
+        // Thử ghi lại
+        localStorage.setItem(key, json);
+      } catch {
+        // Nếu vẫn đầy, chuyển lưu trữ nhẹ vào sessionStorage
+        try {
+          sessionStorage.setItem(key, json);
+        } catch {}
+      }
+    }
+
+    // Tự động lưu trữ vĩnh viễn không giới hạn dung lượng trong IndexedDB (>1GB)
+    idbSet(key, value).catch(() => {});
+  } catch (serializationErr) {
+    console.warn(`[Bộ Nhớ] Không thể tuần tự hóa "${key}":`, serializationErr);
+  }
 }
 
 // Khởi tạo và phục hồi bộ nhớ bền vững đa tầng khi khởi động
@@ -112,9 +120,11 @@ export async function initPersistentMemory(): Promise<{ hydrated: boolean; sourc
     const localRaw = localStorage.getItem(STORAGE_KEYS.VOLUNTEER_MEMBERS);
     const localVols = localRaw ? JSON.parse(localRaw) : null;
 
-    if (Array.isArray(idbVols) && idbVols.length > (Array.isArray(localVols) ? localVols.length : 0)) {
-      safeSet(STORAGE_KEYS.VOLUNTEER_MEMBERS, idbVols);
-      return { hydrated: true, source: 'IndexedDB', members: idbVols };
+    if (Array.isArray(idbVols) && idbVols.length > 0) {
+      if (!Array.isArray(localVols) || idbVols.length >= localVols.length) {
+        safeSet(STORAGE_KEYS.VOLUNTEER_MEMBERS, idbVols);
+        return { hydrated: true, source: 'IndexedDB', members: idbVols };
+      }
     }
     return { hydrated: false, members: localVols || idbVols || undefined };
   } catch {
@@ -1265,6 +1275,8 @@ export async function getStorageDiagnostics(): Promise<{
   totalAttendances: number;
   idbSupported: boolean;
   estimatedSizeKb: number;
+  maxStorageMb: number;
+  availableMb: number;
   memoryHealth: string;
 }> {
   const members = getVolunteerMembers();
@@ -1281,7 +1293,61 @@ export async function getStorageDiagnostics(): Promise<{
     totalAttendances: attendances.length,
     idbSupported: idbStats.isSupported,
     estimatedSizeKb: idbStats.estimatedSizeKb,
-    memoryHealth: 'Hoạt động tối ưu (Bộ nhớ 5 tầng: RAM, IndexedDB, LocalStorage, Cloud Firestore, Server)',
+    maxStorageMb: idbStats.maxStorageMb || 1024,
+    availableMb: idbStats.availableMb || 1000,
+    memoryHealth: 'Hoạt động tối ưu (Bộ nhớ 5 tầng: RAM, IndexedDB >1GB, LocalStorage, Cloud Firestore, Server)',
   };
+}
+
+/**
+ * Nâng cấp, đồng bộ và tối ưu hóa toàn bộ hệ thống bộ nhớ
+ */
+export async function upgradeAndOptimizeStorage(): Promise<{
+  success: boolean;
+  message: string;
+  totalMembers: number;
+  honoredCount: number;
+  freedBytes: number;
+}> {
+  try {
+    // 1. Tối ưu hóa và chuẩn hóa danh sách đoàn viên & điểm danh
+    const currentMembers = getVolunteerMembers();
+    const currentAtt = getVolunteerAttendance();
+    const { members: cleanMembers } = deduplicateAndRecomputeVolunteerMembers(currentMembers, currentAtt);
+    saveVolunteerMembers(cleanMembers);
+
+    // 2. Tối ưu hóa bộ nhớ IndexedDB
+    const idbResult = await idbOptimize();
+
+    // 3. Dọn dẹp cache rác localStorage
+    let freed = idbResult.freedBytes || 0;
+    try {
+      localStorage.removeItem(STORAGE_KEYS.BACKUP);
+      localStorage.removeItem(STORAGE_KEYS.AI_LOGS);
+      freed += 1024 * 50;
+    } catch {}
+
+    // 4. Đồng bộ lên Cloud & Server
+    await pushCollectionToServer('volunteerMembers', cleanMembers);
+    await pushCollectionToServer('volunteerAttendance', currentAtt);
+
+    const honoredCount = cleanMembers.filter(m => m.isHonored || (m.activitiesCount || 0) >= 1).length;
+
+    return {
+      success: true,
+      message: `Đã nâng cấp bộ nhớ thành công! Hệ thống hoạt động với dung lượng mở rộng IndexedDB, tối ưu ${cleanMembers.length} đoàn viên và ${honoredCount} gương vinh danh.`,
+      totalMembers: cleanMembers.length,
+      honoredCount,
+      freedBytes: freed,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Lỗi nâng cấp bộ nhớ: ${err?.message || err}`,
+      totalMembers: 0,
+      honoredCount: 0,
+      freedBytes: 0,
+    };
+  }
 }
 

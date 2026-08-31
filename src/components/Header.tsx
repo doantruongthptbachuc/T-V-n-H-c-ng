@@ -36,6 +36,7 @@ interface HeaderProps {
   isAdminLoggedIn: boolean;
   onOpenAppInstall?: () => void;
   onOpenSyncModal?: () => void;
+  onOpenMemoryManager?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -47,6 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
   isAdminLoggedIn,
   onOpenAppInstall,
   onOpenSyncModal,
+  onOpenMemoryManager,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [syncState, setSyncState] = useState<SyncState>(realtimeSync.getState());
@@ -113,6 +115,25 @@ export const Header: React.FC<HeaderProps> = ({
                 {syncState.hasAppUpdate && (
                   <span className="w-2 h-2 rounded-full bg-rose-500 animate-bounce" title="Có bản cập nhật mới"></span>
                 )}
+              </button>
+            )}
+
+            {/* Memory Turbo Engine & Diagnostics Trigger */}
+            {onOpenMemoryManager && (
+              <button
+                onClick={onOpenMemoryManager}
+                className="inline-flex items-center space-x-1.5 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 hover:text-white font-bold px-2.5 sm:px-3 py-1 rounded-full shadow-sm hover:shadow transition-all border border-indigo-500/40 cursor-pointer text-xs group"
+                title="Trung tâm Quản lý & Nâng cấp Bộ nhớ Turbo 5 tầng (>1GB)"
+              >
+                <span className="p-0.5 bg-indigo-500/30 rounded-full text-amber-300">
+                  <Sparkles className="w-3 h-3 text-amber-300" />
+                </span>
+                <span className="hidden sm:inline text-xs">
+                  Bộ nhớ Turbo
+                </span>
+                <span className="sm:hidden text-xs">
+                  Bộ nhớ
+                </span>
               </button>
             )}
 
@@ -315,6 +336,19 @@ export const Header: React.FC<HeaderProps> = ({
                 <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
                 <span>LIÊN KẾT ĐỒNG BỘ WEB ↔ APP ĐIỆN THOẠI</span>
                 <span className={`w-2.5 h-2.5 rounded-full ${syncState.isConnected ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+              </button>
+            )}
+
+            {onOpenMemoryManager && (
+              <button
+                onClick={() => {
+                  onOpenMemoryManager();
+                  setMobileMenuOpen(false);
+                }}
+                className="flex items-center justify-center space-x-2 w-full py-3 bg-gradient-to-r from-indigo-900 to-purple-900 text-amber-300 font-black rounded-xl border border-indigo-400/50 shadow cursor-pointer text-xs"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>TRUNG TÂM NÂNG CẤP & ĐIỀU HÀNH BỘ NHỚ (TURBO)</span>
               </button>
             )}
 

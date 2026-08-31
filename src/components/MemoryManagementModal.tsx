@@ -4,30 +4,32 @@ import {
   RefreshCw,
   Download,
   Upload,
+  Cloud,
   Sparkles,
-  ShieldCheck,
   CheckCircle2,
   AlertCircle,
   FileSpreadsheet,
-  Trash2,
-  X,
   HardDrive,
   Cpu,
-  Cloud,
-  FileText
+  ShieldCheck,
+  X,
+  Zap,
+  Layers,
+  Gauge
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { VolunteerMember } from '../types';
 import {
+  getStorageDiagnostics,
   restoreOfficial2025Volunteers,
+  deduplicateAndRecomputeVolunteerMembers,
+  saveVolunteerMembers,
+  pushCollectionToServer,
+  syncAllWithServer,
   exportVolunteerMemoryJSON,
   importVolunteerMemoryJSON,
   exportHonoredStudentsCSV,
-  getStorageDiagnostics,
-  deduplicateAndRecomputeVolunteerMembers,
-  saveVolunteerMembers,
-  syncAllWithServer,
-  pushCollectionToServer,
+  upgradeAndOptimizeStorage,
 } from '../utils/storage';
 
 interface MemoryManagementModalProps {
@@ -50,6 +52,8 @@ export const MemoryManagementModal: React.FC<MemoryManagementModalProps> = ({
     totalAttendances: number;
     idbSupported: boolean;
     estimatedSizeKb: number;
+    maxStorageMb?: number;
+    availableMb?: number;
     memoryHealth: string;
   } | null>(null);
 
@@ -68,11 +72,46 @@ export const MemoryManagementModal: React.FC<MemoryManagementModalProps> = ({
   }, [isOpen, volunteerMembers]);
 
   const loadStats = async () => {
-    const diag = await getStorageDiagnostics();
-    setStats(diag);
+    try {
+      const diag = await getStorageDiagnostics();
+      setStats(diag);
+    } catch {
+      // Fallback
+    }
   };
 
   if (!isOpen) return null;
+
+  // 0. Upgrade and Expand Multi-Tier Storage Engine
+  const handleUpgradeMemory = async () => {
+    setIsLoading(true);
+    setStatusMessage({ type: 'info', text: '⚡ Đang thực hiện nâng cấp & mở rộng bộ nhớ 5 tầng (RAM Cache, Turbo IndexedDB >1GB, Cloud Firestore)...' });
+
+    try {
+      const result = await upgradeAndOptimizeStorage();
+      if (result.success) {
+        onUpdateVolunteerMembers(volunteerMembers);
+        confetti({ particleCount: 150, spread: 90 });
+        setStatusMessage({
+          type: 'success',
+          text: `🚀 ${result.message}`,
+        });
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: `❌ ${result.message}`,
+        });
+      }
+      await loadStats();
+    } catch (err: any) {
+      setStatusMessage({
+        type: 'error',
+        text: `❌ Lỗi nâng cấp: ${err?.message || 'Không xác định'}`,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // 1. Restore official 152 volunteers for 2025 - 2026
   const handleRestoreOfficial152 = () => {
@@ -158,17 +197,22 @@ export const MemoryManagementModal: React.FC<MemoryManagementModalProps> = ({
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const content = event.target?.result as string;
-      const res = importVolunteerMemoryJSON(content);
-      if (res.success) {
-        onUpdateVolunteerMembers(volunteerMembers);
-        setStatusMessage({ type: 'success', text: `✅ ${res.message}` });
-        confetti({ particleCount: 80, spread: 60 });
-        loadStats();
-      } else {
-        setStatusMessage({ type: 'error', text: `❌ ${res.message}` });
+      try {
+        const content = event.target?.result as string;
+        const res = importVolunteerMemoryJSON(content);
+        if (res.success) {
+          onUpdateVolunteerMembers(volunteerMembers);
+          setStatusMessage({ type: 'success', text: `✅ ${res.message}` });
+          confetti({ particleCount: 80, spread: 60 });
+          loadStats();
+        } else {
+          setStatusMessage({ type: 'error', text: `❌ ${res.message}` });
+        }
+      } catch (err: any) {
+        setStatusMessage({ type: 'error', text: `❌ Lỗi nạp tệp: ${err?.message || 'Tệp không đúng định dạng'}` });
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     reader.onerror = () => {
       setStatusMessage({ type: 'error', text: '❌ Lỗi đọc tệp sao lưu từ máy tính.' });
@@ -183,17 +227,17 @@ export const MemoryManagementModal: React.FC<MemoryManagementModalProps> = ({
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white px-6 py-5 flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-2xl border border-indigo-500/30">
+            <div className="p-2.5 bg-gradient-to-tr from-amber-500 to-indigo-500 text-white rounded-2xl shadow-md">
               <Database className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
                 <h3 className="text-base sm:text-lg font-black tracking-tight">
-                  TRUNG TÂM BỘ NHỚ ĐA TẦNG & VINH DANH HỌC SINH
+                  TRUNG TÂM NÂNG CẤP & ĐIỀU HÀNH BỘ NHỚ
                 </h3>
               </div>
-              <p className="text-xs text-slate-400">
-                Kiến trúc lưu trữ 5 tầng: RAM Cache • IndexedDB • LocalStorage • Cloud Firestore • Server
+              <p className="text-xs text-slate-300">
+                Kiến trúc lưu trữ 5 tầng: RAM Cache • Turbo IndexedDB (&gt;1GB) • LocalStorage • Cloud Firestore • Server
               </p>
             </div>
           </div>
@@ -226,9 +270,42 @@ export const MemoryManagementModal: React.FC<MemoryManagementModalProps> = ({
               ) : (
                 <RefreshCw className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 animate-spin" />
               )}
-              <span>{statusMessage.text}</span>
+              <span className="leading-relaxed">{statusMessage.text}</span>
             </div>
           )}
+
+          {/* Featured Hero Upgrade Banner */}
+          <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-blue-500/10 border-2 border-indigo-500/30 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="space-y-1 text-center sm:text-left">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-wider">
+                <Zap className="w-3 h-3 text-amber-300" />
+                <span>Turbo Memory Engine</span>
+              </div>
+              <h4 className="text-sm sm:text-base font-black text-slate-900">
+                Nâng cấp & Mở rộng Dung lượng Toàn trang
+              </h4>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Tự động tối ưu bảng vinh danh, chuẩn hóa dữ liệu đoàn viên và giải phóng bộ nhớ đệm chống giật lag.
+              </p>
+            </div>
+            <button
+              onClick={handleUpgradeMemory}
+              disabled={isLoading}
+              className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-700 hover:to-blue-700 text-white font-black text-xs rounded-2xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 flex items-center justify-center space-x-2 shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              {isLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Đang nâng cấp...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 text-amber-300" />
+                  <span>NÂNG CẤP & TỐI ƯU NGAY</span>
+                </>
+              )}
+            </button>
+          </div>
 
           {/* Telemetry Metrics Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -267,23 +344,24 @@ export const MemoryManagementModal: React.FC<MemoryManagementModalProps> = ({
 
             <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-center space-y-1">
               <div className="flex items-center justify-center space-x-1 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-                <Cloud className="w-3.5 h-3.5 text-blue-600" />
-                <span>Trạng thái bộ nhớ</span>
+                <Layers className="w-3.5 h-3.5 text-blue-600" />
+                <span>Dung lượng mở rộng</span>
               </div>
               <p className="text-sm font-black text-emerald-600 pt-1.5 flex items-center justify-center space-x-1">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>An toàn 100%</span>
+                <span>{stats?.maxStorageMb ? `> ${stats.maxStorageMb} MB` : '> 1024 MB'}</span>
               </p>
               <p className="text-[10px] font-semibold text-slate-500">
-                {stats?.estimatedSizeKb ? `~${stats.estimatedSizeKb} KB` : 'IndexedDB Ready'}
+                {stats?.estimatedSizeKb ? `Đã dùng ~${stats.estimatedSizeKb} KB` : 'IndexedDB Turbo'}
               </p>
             </div>
           </div>
 
           {/* Core Action Tools */}
           <div className="space-y-3">
-            <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider">
-              TÁC VỤ ĐIỀU HÀNH BỘ NHỚ & BẢNG VÀNG
+            <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center space-x-1.5">
+              <Gauge className="w-3.5 h-3.5 text-indigo-600" />
+              <span>TÁC VỤ ĐIỀU HÀNH BỘ NHỚ & BẢNG VÀNG</span>
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -317,7 +395,7 @@ export const MemoryManagementModal: React.FC<MemoryManagementModalProps> = ({
                 </div>
                 <div>
                   <h5 className="text-xs font-black text-indigo-950">
-                    Tối ưu hóa & Dọn dẹp Bộ nhớ
+                    Tối ưu hóa & Dọn dẹp Cache
                   </h5>
                   <p className="text-[11px] text-indigo-800 mt-0.5 leading-relaxed">
                     Xóa bản ghi trùng lặp, chuẩn hóa họ tên, cập nhật thứ hạng và giải phóng cache thừa.
@@ -394,7 +472,7 @@ export const MemoryManagementModal: React.FC<MemoryManagementModalProps> = ({
               </label>
             </div>
             <p className="text-[10px] text-slate-500 italic">
-              * Tệp sao lưu JSON chứa toàn bộ 152 đoàn viên, lịch sử chuyên cần điểm danh và danh hiệu vinh danh.
+              * Tệp sao lưu JSON chứa toàn bộ đoàn viên, lịch sử chuyên cần điểm danh và danh hiệu vinh danh.
             </p>
           </div>
         </div>
@@ -402,7 +480,7 @@ export const MemoryManagementModal: React.FC<MemoryManagementModalProps> = ({
         {/* Footer */}
         <div className="bg-slate-50 px-6 py-3.5 border-t border-slate-200 flex items-center justify-between">
           <span className="text-[11px] font-semibold text-slate-500">
-            Hệ thống bộ nhớ THPT Ba Chúc • Phiên bản 2.5
+            Hệ thống bộ nhớ THPT Ba Chúc • Phiên bản Turbo 3.0
           </span>
           <button
             onClick={onClose}

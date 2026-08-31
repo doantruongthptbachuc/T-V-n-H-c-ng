@@ -52,12 +52,15 @@ import {
   Cpu,
   ShieldAlert,
   ChevronRight,
-  X
+  X,
+  FileText,
+  Printer
 } from 'lucide-react';
 import { LogoCropperModal } from './LogoCropperModal';
 import { MemoryManagementModal } from './MemoryManagementModal';
 import { HonorMemoryCertificateModal } from './HonorMemoryCertificateModal';
 import { SecurityFirewallPanel } from './SecurityFirewallPanel';
+import { CounselingReportModal } from './CounselingReportModal';
 import { StudentAvatar } from './StudentAvatar';
 import { VolunteerActivityCharts } from './VolunteerActivityCharts';
 import { 
@@ -183,6 +186,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Memory Management & Honor Certificate Modal States
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [adminViewingCertMember, setAdminViewingCertMember] = useState<VolunteerMember | null>(null);
 
   // Health Articles management in Admin
@@ -972,8 +976,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </p>
           </div>
 
-          {/* Action Buttons: Save & Sync */}
+          {/* Action Buttons: Save & Sync & Export Monthly Report */}
           <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => setIsReportModalOpen(true)}
+              className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-2xl text-xs font-black flex items-center space-x-2 shadow-lg transition cursor-pointer"
+              title="Xuất báo cáo tình hình tư vấn tâm lý học đường định kỳ (File CSV / PDF)"
+            >
+              <FileText className="w-4 h-4 text-slate-950" />
+              <span>XUẤT BÁO CÁO THÁNG (PDF/CSV)</span>
+            </button>
+
             <button
               onClick={handleManualSaveAll}
               className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-bold flex items-center space-x-2 shadow-lg transition cursor-pointer"
@@ -1205,6 +1218,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <Flag className="w-4 h-4 text-red-500" />
                 <span>Biểu Đồ Đoàn & Tình Nguyện</span>
               </button>
+
+              <div className="ml-auto flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setIsReportModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 flex items-center space-x-1.5 shadow-xs transition cursor-pointer"
+                  title="Mở bảng trích xuất & xuất báo cáo định kỳ tháng"
+                >
+                  <FileText className="w-4 h-4 text-slate-950" />
+                  <span>📑 Xuất Báo Cáo Tháng (PDF/CSV)</span>
+                </button>
+              </div>
             </div>
 
             {analyticsSubView === 'qa_charts' && (
@@ -2082,6 +2107,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <p className="text-xs text-slate-500 mt-0.5">
                   Thầy Cô có thể chỉnh sửa nội dung câu hỏi, câu trả lời, thông tin học sinh/lớp cho phù hợp với trường Ba Chúc và tự động lưu.
                 </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsReportModalOpen(true)}
+                  className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs flex items-center space-x-1.5 shadow-sm transition cursor-pointer"
+                  title="Xuất báo cáo tư vấn tâm lý học đường định kỳ"
+                >
+                  <FileText className="w-4 h-4 text-slate-950" />
+                  <span>Xuất Báo Cáo Tháng (PDF/CSV)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={exportQuestionsCSV}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center space-x-1.5 transition cursor-pointer"
+                  title="Tải nhanh toàn bộ file CSV câu hỏi"
+                >
+                  <Download className="w-4 h-4 text-slate-500" />
+                  <span>Tải CSV Nhanh</span>
+                </button>
               </div>
             </div>
 
@@ -4623,11 +4670,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Quick CSV Export Cards */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                  XUẤT DỮ LIỆU EXCEL / GOOGLE SHEETS (TẢI FILE TRỰC TIẾP):
-                </h4>
+              {/* Quick CSV Export Cards & Monthly Report Center */}
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                    XUẤT DỮ LIỆU BÁO CÁO & LƯU TRỮ ĐỊNH KỲ:
+                  </h4>
+                  <span className="text-[11px] text-slate-500 font-medium">Hỗ trợ trích xuất theo tháng dạng CSV & PDF</span>
+                </div>
+
+                {/* Primary Featured Monthly Report Card */}
+                <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-blue-500/10 border-2 border-amber-400/60 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                  <div className="flex items-start space-x-3.5">
+                    <div className="p-3 bg-gradient-to-br from-amber-500 to-amber-600 text-slate-950 rounded-2xl shadow-md shrink-0">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 bg-amber-400 text-slate-950 font-black text-[10px] rounded-md uppercase">
+                          KHUYÊN DÙNG HẰNG THÁNG
+                        </span>
+                        <span className="text-xs font-bold text-indigo-950">Lưu Trữ Sư Phạm & Báo Cáo Sở GD&ĐT</span>
+                      </div>
+                      <h4 className="text-sm sm:text-base font-black text-slate-900">
+                        Báo Cáo Tình Hình Tư Vấn Tâm Lý Học Đường (File CSV / PDF)
+                      </h4>
+                      <p className="text-xs text-slate-600 max-w-xl leading-relaxed">
+                        Tự động tổng hợp số liệu tư vấn, tỷ lệ giải quyết, phân tích chuyên sâu các chủ đề học sinh quan tâm và xuất biểu mẫu in ấn A4 chuẩn hành chính kèm chữ ký phê duyệt.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsReportModalOpen(true)}
+                    className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-2xl text-xs flex items-center justify-center space-x-2 shadow-md transition cursor-pointer shrink-0"
+                  >
+                    <FileText className="w-4 h-4 text-slate-950" />
+                    <span>MỞ TRÌNH TẠO BÁO CÁO</span>
+                  </button>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <button
                     type="button"
@@ -4834,6 +4917,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 onUpdateVolunteerMembersBulk(updated);
               }
             }}
+          />
+        )}
+
+        {/* MONTHLY PSYCHOLOGICAL COUNSELING REPORT MODAL (CSV & PDF EXPORT) */}
+        {isReportModalOpen && (
+          <CounselingReportModal
+            isOpen={isReportModalOpen}
+            onClose={() => setIsReportModalOpen(false)}
+            questions={questions}
+            stories={stories}
+            aiLogs={aiLogs}
+            counselors={counselors}
+            config={config}
           />
         )}
       </div>

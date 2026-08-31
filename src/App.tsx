@@ -100,6 +100,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { Footer } from './components/Footer';
 import { AppInstallModal } from './components/AppInstallModal';
 import { SyncStatusModal } from './components/SyncStatusModal';
+import { MemoryManagementModal } from './components/MemoryManagementModal';
 import { FloatingHotlineWidget } from './components/FloatingHotlineWidget';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { getHotlineDisplay, isHotlineActive } from './utils/hotlineHelper';
@@ -136,6 +137,7 @@ export default function App() {
   const [isEmergencyModalOpen, setIsEmergencyModalOpen] = useState(false);
   const [isAppInstallOpen, setIsAppInstallOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
   const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
 
   // Subscribe to Firebase Authentication state
@@ -846,6 +848,7 @@ export default function App() {
         onOpenEmergency={() => setIsEmergencyModalOpen(true)}
         onOpenAppInstall={() => setIsAppInstallOpen(true)}
         onOpenSyncModal={() => setIsSyncModalOpen(true)}
+        onOpenMemoryManager={() => setIsMemoryModalOpen(true)}
         onOpenAdmin={() => {
           if (isAdminLoggedIn) {
             handleSelectTab('admin');
@@ -1170,7 +1173,7 @@ export default function App() {
               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-black uppercase tracking-wider border border-emerald-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Tường Lửa WAF Đang Bảo Vệ</span>
+                <span>Tường Lửa WAF Bảo Vệ • Đăng Nhập Siêu Tốc</span>
               </div>
               <div className="w-14 h-14 bg-indigo-100 text-indigo-700 rounded-2xl flex items-center justify-center mx-auto shadow-xs">
                 <Lock className="w-7 h-7" />
@@ -1185,9 +1188,21 @@ export default function App() {
 
             <form onSubmit={handleAdminLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Email / Tên đăng nhập quản trị
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Email / Tên đăng nhập quản trị
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminEmail('tuvanhocduongthptbachuc2025');
+                      setAdminPassword('Bachuc@2025');
+                    }}
+                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer transition-colors"
+                  >
+                    ⚡ Điền tài khoản mặc định
+                  </button>
+                </div>
                 <input
                   type="text"
                   required
@@ -1242,7 +1257,7 @@ export default function App() {
                     <span>ĐANG XÁC THỰC...</span>
                   </>
                 ) : (
-                  <span>ĐĂNG NHẬP HỆ THỐNG</span>
+                  <span>ĐĂNG NHẬP HỆ THỐNG TỨC THÌ</span>
                 )}
               </button>
 
@@ -1273,6 +1288,17 @@ export default function App() {
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
         onOpenAppInstall={() => setIsAppInstallOpen(true)}
+      />
+
+      {/* Turbo Memory Manager & Diagnostics Modal */}
+      <MemoryManagementModal
+        isOpen={isMemoryModalOpen}
+        onClose={() => setIsMemoryModalOpen(false)}
+        volunteerMembers={volunteerMembers}
+        onUpdateVolunteerMembers={(members) => {
+          setVolunteerMembers(members);
+          saveVolunteerMembers(members);
+        }}
       />
 
       {/* Floating Live Real-time Sync Toast Notification */}

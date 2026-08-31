@@ -1,6 +1,6 @@
 {
   "name": "Tư Vấn Học Đường THPT Ba Chúc",
-  "description": "Cổng thông tin & Tư vấn học đường Trường THPT Ba Chúc - Đồng bộ liên kết dữ liệu 2 chiều thời gian thực giữa Web và App trên điện thoại (Tích hợp Tường lửa Bảo vệ WAF & Ẩn mã nguồn)",
+  "description": "Cổng thông tin & Tư vấn học đường Trường THPT Ba Chúc - Đồng bộ liên kết dữ liệu thời gian thực, Quản lý đoàn viên, Xuất báo cáo tình hình tư vấn định kỳ hàng tháng dạng CSV/PDF chuẩn sư phạm và Tường lửa bảo vệ WAF",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
