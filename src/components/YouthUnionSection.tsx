@@ -267,9 +267,16 @@ export const YouthUnionSection: React.FC<YouthUnionSectionProps> = ({
 
   const availableVolClasses = useMemo(() => {
     const classes = new Set<string>();
-    volunteerMembers.forEach(m => { if (m.className) classes.add(m.className.trim().toUpperCase()); });
+    volunteerMembers.forEach(m => {
+      if (m.className) {
+        const c = m.className.trim().toUpperCase();
+        if (volGradeFilter === 'all' || c.startsWith(volGradeFilter)) {
+          classes.add(c);
+        }
+      }
+    });
     return Array.from(classes).sort();
-  }, [volunteerMembers]);
+  }, [volunteerMembers, volGradeFilter]);
 
   // Filtered Registrations List
   const filteredRegistrations = useMemo(() => {
@@ -1644,6 +1651,16 @@ export const YouthUnionSection: React.FC<YouthUnionSectionProps> = ({
                   <Cpu className="w-4 h-4" />
                   <span>Trung tâm Bộ nhớ</span>
                 </button>
+                {isAdminLoggedIn && (
+                  <button
+                    onClick={() => exportVolunteersCSV(volunteerMembers)}
+                    className="px-3.5 py-2 bg-rose-700 hover:bg-rose-600 text-white rounded-xl text-xs font-black transition-all flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                    title="Tải về danh sách tất cả đoàn viên tình nguyện định dạng CSV"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Xuất CSV Đoàn Viên ({volunteerMembers.length})</span>
+                  </button>
+                )}
                 <button
                   onClick={() => exportHonoredStudentsCSV(volunteerMembers)}
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all flex items-center space-x-1.5 cursor-pointer shadow-xs"
@@ -1679,37 +1696,68 @@ export const YouthUnionSection: React.FC<YouthUnionSectionProps> = ({
                   </div>
 
                   {isAdminLoggedIn && (
-                    <button
-                      onClick={() => setIsAddingNewMember(true)}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center space-x-1.5 shadow-md transition cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Thêm đoàn viên</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={() => exportVolunteersCSV(filteredVolunteers.length > 0 ? filteredVolunteers : volunteerMembers)}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center space-x-1.5 shadow-sm transition cursor-pointer"
+                        title="Tải về danh sách đoàn viên hiện tại dưới dạng file CSV"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Tải CSV ({filteredVolunteers.length > 0 ? filteredVolunteers.length : volunteerMembers.length})</span>
+                      </button>
+
+                      <button
+                        onClick={() => setIsAddingNewMember(true)}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center space-x-1.5 shadow-md transition cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Thêm đoàn viên</span>
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
 
               {/* Filters Bar: Status, Year, Class */}
               <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100 text-xs font-bold text-slate-700">
-                {/* Status Toggle */}
-                <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl">
+                {/* Status Toggle Buttons */}
+                <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
                   <button
                     onClick={() => setVolStatusFilter('all')}
-                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center space-x-1 ${
                       volStatusFilter === 'all' ? 'bg-white text-red-700 shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    Tất cả ({volunteerMembers.length})
+                    <span>Tất cả</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700 font-bold">{volunteerMembers.length}</span>
                   </button>
+
                   <button
                     onClick={() => setVolStatusFilter('active')}
-                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center space-x-1 ${
                       volStatusFilter === 'active' ? 'bg-emerald-600 text-white shadow-xs font-black' : 'text-emerald-700 hover:bg-emerald-50'
                     }`}
                   >
-                    Đang hoạt động
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
+                    <span>Đang hoạt động</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${volStatusFilter === 'active' ? 'bg-emerald-700 text-emerald-100' : 'bg-emerald-100 text-emerald-800'}`}>
+                      {volunteerMembers.filter(m => m.status === 'active').length}
+                    </span>
                   </button>
+
+                  <button
+                    onClick={() => setVolStatusFilter('honored')}
+                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center space-x-1.5 ${
+                      volStatusFilter === 'honored' ? 'bg-purple-600 text-white shadow-xs font-black' : 'text-purple-700 hover:bg-purple-50'
+                    }`}
+                  >
+                    <Star className="w-3.5 h-3.5 fill-current text-amber-300" />
+                    <span>Được vinh danh</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${volStatusFilter === 'honored' ? 'bg-purple-700 text-purple-100' : 'bg-purple-100 text-purple-800'}`}>
+                      {volunteerMembers.filter(m => m.isHonored || m.status === 'honored').length}
+                    </span>
+                  </button>
+
                   <button
                     onClick={() => setVolStatusFilter('leader')}
                     className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center space-x-1 ${
@@ -1718,16 +1766,30 @@ export const YouthUnionSection: React.FC<YouthUnionSectionProps> = ({
                   >
                     <span>🚩</span>
                     <span>Cờ Thủ Lĩnh</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${volStatusFilter === 'leader' ? 'bg-amber-600 text-amber-100' : 'bg-amber-100 text-amber-800'}`}>
+                      {volunteerMembers.filter(m => m.isLeader).length}
+                    </span>
                   </button>
-                  <button
-                    onClick={() => setVolStatusFilter('honored')}
-                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center space-x-1 ${
-                      volStatusFilter === 'honored' ? 'bg-purple-600 text-white shadow-xs font-black' : 'text-purple-700 hover:bg-purple-50'
+
+                  {/* Status Dropdown for other statuses */}
+                  <select
+                    value={['graduated_12', 'inactive_rules_violation', 'inactive_low_performance'].includes(volStatusFilter) ? volStatusFilter : ''}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setVolStatusFilter(e.target.value as any);
+                      }
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition border-0 cursor-pointer ${
+                      ['graduated_12', 'inactive_rules_violation', 'inactive_low_performance'].includes(volStatusFilter)
+                        ? 'bg-slate-700 text-white shadow-xs'
+                        : 'bg-transparent text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    <Star className="w-3.5 h-3.5" />
-                    <span>Vinh danh</span>
-                  </button>
+                    <option value="" className="text-slate-800 font-bold bg-white">Trạng thái khác...</option>
+                    <option value="graduated_12" className="text-slate-800 font-bold bg-white">🎓 Đã tốt nghiệp 12 ({volunteerMembers.filter(m => m.status === 'graduated_12').length})</option>
+                    <option value="inactive_low_performance" className="text-slate-800 font-bold bg-white">📚 Tạm dừng tập trung học ({volunteerMembers.filter(m => m.status === 'inactive_low_performance').length})</option>
+                    <option value="inactive_rules_violation" className="text-slate-800 font-bold bg-white">⚠️ Tạm ngừng hoạt động ({volunteerMembers.filter(m => m.status === 'inactive_rules_violation').length})</option>
+                  </select>
                 </div>
 
                 {/* Academic Year Filter */}
@@ -1771,12 +1833,33 @@ export const YouthUnionSection: React.FC<YouthUnionSectionProps> = ({
                     onChange={(e) => setVolClassFilter(e.target.value)}
                     className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   >
-                    <option value="all">Tất cả các lớp</option>
-                    {availableVolClasses.map(c => (
-                      <option key={c} value={c}>Lớp {c}</option>
-                    ))}
+                    <option value="all">Tất cả các lớp ({volunteerMembers.length})</option>
+                    {availableVolClasses.map(c => {
+                      const countInClass = volunteerMembers.filter(m => (m.className || '').trim().toUpperCase() === c).length;
+                      return (
+                        <option key={c} value={c}>Lớp {c} ({countInClass} bạn)</option>
+                      );
+                    })}
                   </select>
                 </div>
+
+                {/* Reset Filters button if any filter is active */}
+                {(volStatusFilter !== 'all' || volYearFilter !== 'all' || volGradeFilter !== 'all' || volClassFilter !== 'all' || volSearch.trim() !== '') && (
+                  <button
+                    onClick={() => {
+                      setVolStatusFilter('all');
+                      setVolYearFilter('all');
+                      setVolGradeFilter('all');
+                      setVolClassFilter('all');
+                      setVolSearch('');
+                    }}
+                    className="px-2.5 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-bold transition flex items-center space-x-1 cursor-pointer"
+                    title="Xóa tất cả các bộ lọc và tìm kiếm"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Xóa lọc</span>
+                  </button>
+                )}
               </div>
             </div>
 

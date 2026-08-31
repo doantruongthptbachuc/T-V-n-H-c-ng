@@ -112,10 +112,9 @@ export async function getFirebaseCounselors(): Promise<Counselor[]> {
   try {
     const docRef = doc(db, SETTINGS_COLLECTION, COUNSELORS_DOC);
     const snap = await getDoc(docRef);
-    if (snap.exists() && Array.isArray(snap.data()?.items)) {
+    if (snap.exists() && Array.isArray(snap.data()?.items) && snap.data().items.length > 0) {
       return snap.data().items as Counselor[];
     } else {
-      await setDoc(docRef, cleanForFirestore({ items: initialCounselors }));
       return initialCounselors;
     }
   } catch (err) {
@@ -127,10 +126,9 @@ export async function getFirebaseCounselors(): Promise<Counselor[]> {
 export async function saveFirebaseCounselors(counselors: Counselor[]): Promise<void> {
   try {
     const docRef = doc(db, SETTINGS_COLLECTION, COUNSELORS_DOC);
-    await setDoc(docRef, cleanForFirestore({ items: counselors }));
+    await setDoc(docRef, cleanForFirestore({ items: counselors }), { merge: true });
   } catch (err) {
-    console.error('Lỗi saveFirebaseCounselors:', err);
-    throw err;
+    console.warn('Lỗi saveFirebaseCounselors:', err);
   }
 }
 

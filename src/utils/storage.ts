@@ -227,6 +227,9 @@ export async function syncAllWithServer(): Promise<{ success: boolean; data?: an
           if (Array.isArray(s.activities) && s.activities.length > 0 && (!cloudActivities || cloudActivities.length === 0)) {
             safeSet(STORAGE_KEYS.ACTIVITIES, s.activities);
           }
+          if (Array.isArray(s.counselors) && s.counselors.length > 0 && (!cloudCounselors || cloudCounselors.length === 0)) {
+            safeSet(STORAGE_KEYS.COUNSELORS, s.counselors);
+          }
           if (Array.isArray(s.healthArticles) && s.healthArticles.length > 0) {
             const currentHealth = getHealthArticles();
             const existingHIds = new Set(currentHealth.map(h => h.id));
@@ -1093,10 +1096,10 @@ export function getCounselors(): Counselor[] {
     return initialCounselors;
   }
 
-  // Seamless migration for updated counselor name
+  // Seamless migration only for legacy outdated initial name
   let needsUpdate = false;
   const migrated = saved.map(c => {
-    if (c.id === 'c-3' && (c.name.includes('Lê Thị Gái') || !c.name.includes('Hiệp'))) {
+    if (c.id === 'c-3' && c.name.includes('Lê Thị Gái')) {
       needsUpdate = true;
       return {
         ...c,

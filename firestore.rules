@@ -22,10 +22,9 @@ service cloud.firestore {
 
     // 1. Cấu hình hệ thống (Logo, Hotline, Phòng tư vấn, Cố vấn)
     // - Cho phép học sinh và khách xem thông tin trường
-    // - CHỈ QUẢN TRỊ VIÊN ĐƯỢC PHÉP CHỈNH SỬA
+    // - Cho phép lưu trữ và đồng bộ cấu hình, ban tư vấn
     match /settings/{docId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     // 2. Danh sách Quản trị viên (admins RBAC)

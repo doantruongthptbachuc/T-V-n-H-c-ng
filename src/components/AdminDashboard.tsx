@@ -440,6 +440,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setCounselorFormPhone(c.phone || config.hotline);
     setCounselorFormEmail(c.email || '');
     setCounselorFormBio(c.bio || '');
+
+    setTimeout(() => {
+      const formEl = document.getElementById('counselor-edit-form');
+      if (formEl) {
+        formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
   };
 
   const handleResetCounselorForm = () => {
@@ -1442,7 +1449,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'counselors' && (
           <div className="space-y-6">
             {/* Form Add / Edit Counselor */}
-            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-5">
+            <div id="counselor-edit-form" className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-5 scroll-mt-6">
               <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
                 <div className="space-y-0.5">
                   <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center space-x-2">

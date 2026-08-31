@@ -917,6 +917,7 @@ export default function App() {
               onNavigate={handleSelectTab}
               onOpenQuestionModal={() => handleSelectTab('qa')}
               isAdminLoggedIn={isAdminLoggedIn}
+              onUpdateCounselor={handleUpdateCounselor}
             />
 
             {/* Highlighted Activities Section */}
