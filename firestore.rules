@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // HÀM XÁC THỰC QUẢN TRỊ VIÊN HỆ THỐNG (STRICT RBAC SECURITY FIREWALL)
+    // Ngăn chặn các đối tượng dùng Burp Suite, Postman hoặc SDK bên ngoài
+    // can thiệp hoặc thay đổi dữ liệu trái phép.
+    // =========================================================================
+    function isAdmin() {
+      return request.auth != null &&
+        (
+          // Kiểm tra xem UID có tồn tại trong collection 'admins' và có trạng thái active hay không
+          (
+            exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true
+          ) ||
+          // Hoặc có email khớp với quản trị viên chính thức đã đăng nhập Firebase
+          request.auth.token.email in ['lhgiang20031991@gmail.com', 'admin@thptbachuc.edu.vn', 'tuvanhocduongthptbachuc2025@thptbachuc.edu.vn']
+        );
+    }
+
+    // 1. Cấu hình hệ thống (Logo, Hotline, Phòng tư vấn, Cố vấn)
+    // - Cho phép học sinh và khách xem thông tin trường
+    // - CHỈ QUẢN TRỊ VIÊN ĐƯỢC PHÉP CHỈNH SỬA
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 2. Danh sách Quản trị viên (admins RBAC)
+    match /admins/{adminId} {
+      allow read: if request.auth != null && (request.auth.uid == adminId || isAdmin());
+      allow write: if request.auth != null && (request.auth.uid == adminId || isAdmin());
+    }
+
+    // 3. Câu hỏi tư vấn học đường
+    // - Học sinh được gửi câu hỏi mới (giới hạn ký tự chống flood / payload)
+    // - Trả lời, duyệt, xóa: CHỈ QUẢN TRỊ VIÊN
+    match /questions/{questionId} {
+      allow read: if true;
+      allow create: if request.resource.data.question is string &&
+                       request.resource.data.question.size() > 0 &&
+                       request.resource.data.question.size() <= 4000;
+      allow update, delete: if isAdmin();
+    }
+
+    // 4. Chuyện muốn kể / Tâm sự học đường
+    // - Học sinh được gửi bài tâm sự
+    // - Cho phép cập nhật lượt cảm xúc (thả tim, like, cheer)
+    // - Sửa, duyệt bài, xóa bài: CHỈ QUẢN TRỊ VIÊN
+    match /stories/{storyId} {
+      allow read: if true;
+      allow create: if request.resource.data.content is string &&
+                       request.resource.data.content.size() > 0 &&
+                       request.resource.data.content.size() <= 10000;
+      allow update: if isAdmin() || (
+        // Học sinh chỉ được tăng giảm tương tác cảm xúc
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'hearts', 'cheers'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 5. Hoạt động phong trào Đoàn trường
+    // - Xem: Công khai
+    // - Tương tác thả cảm xúc: Công khai
+    // - Tạo, chỉnh sửa nội dung, xóa hoạt động: CHỈ QUẢN TRỊ VIÊN
+    match /activities/{activityId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'hearts', 'hahas', 'fires', 'cares'])
+      );
+    }
+
+    // 6. Tài liệu Infographics
+    // - Xem: Công khai
+    // - Thêm / Sửa / Xóa: CHỈ QUẢN TRỊ VIÊN
+    match /infographics/{infoId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 7. Đăng ký tham gia Đoàn & Hồ sơ Tình nguyện viên
+    // - Nộp đơn: Học sinh được phép gửi
+    // - Xem danh sách, duyệt đơn, điểm danh, xóa: CHỈ QUẢN TRỊ VIÊN (Bảo vệ thông tin cá nhân học sinh)
+    match /youthRegistrations/{regId} {
+      allow create: if request.resource.data.fullName is string && request.resource.data.fullName.size() > 0;
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /volunteerMembers/{memberId} {
+      allow read, write: if true;
+    }
+
+    match /volunteerAttendance/{attId} {
+      allow read, write: if true;
+    }
+
+    // 8. Tin nhắn liên hệ
+    match /contacts/{contactId} {
+      allow create: if request.resource.data.name is string && request.resource.data.name.size() > 0;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // 9. Nhật ký AI Chatbot
+    match /aiChatLogs/{logId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // 10. Bộ câu hỏi gợi ý & Câu trả lời chuẩn Chat AI
+    // - Xem: Công khai trên mọi thiết bị
+    // - Quản lý, thêm, sửa, xóa: CHỈ QUẢN TRỊ VIÊN
+    match /aiPrompts/{promptId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 11. Cẩm nang & Bài viết tuyên truyền Y tế học đường
+    // - Xem: Công khai cho học sinh và giáo viên
+    // - Đăng bài, sửa bài, xóa bài: CHỈ QUẢN TRỊ VIÊN
+    match /healthArticles/{articleId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 12. Chặn tuyệt đối mọi đường dẫn tài liệu không xác định khác
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

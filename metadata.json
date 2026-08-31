@@ -1,0 +1,6 @@
+{
+  "name": "Tư Vấn Học Đường THPT Ba Chúc",
+  "description": "Cổng thông tin & Tư vấn học đường Trường THPT Ba Chúc - Đồng bộ liên kết dữ liệu 2 chiều thời gian thực giữa Web và App trên điện thoại (Tích hợp Tường lửa Bảo vệ WAF & Ẩn mã nguồn)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
