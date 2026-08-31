@@ -1586,7 +1586,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <span>Tải ảnh từ máy tính</span>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                           onChange={handleCustomAvatarUpload}
                           className="hidden"
                         />
@@ -3000,7 +3000,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <div className="flex items-center gap-2">
                           <label className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl cursor-pointer font-bold">
                             <span>{isCompressingHImg ? 'Đang nén...' : 'Tải ảnh'}</span>
-                            <input type="file" accept="image/*" onChange={handleHImageUpload} className="hidden" />
+                            <input type="file" accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif" onChange={handleHImageUpload} className="hidden" />
                           </label>
                           <input
                             type="text"
@@ -3270,7 +3270,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   <span>Thay ảnh khác từ máy</span>
                                   <input
                                     type="file"
-                                    accept="image/*"
+                                    accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                                     onChange={handleStoryImageFileUpload}
                                     className="hidden"
                                     disabled={isCompressingStoryImage}
@@ -3294,7 +3294,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <span>{isCompressingStoryImage ? 'Đang nén ảnh...' : 'Tải ảnh từ máy tính / điện thoại'}</span>
                                 <input
                                   type="file"
-                                  accept="image/*"
+                                  accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                                   onChange={handleStoryImageFileUpload}
                                   className="hidden"
                                   disabled={isCompressingStoryImage}
@@ -3719,7 +3719,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <label className="font-bold text-slate-700 block mb-1">Tải ảnh vinh danh học sinh (Tự động nén):</label>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                         onChange={handleVolHonorFileUpload}
                         className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer"
                       />
@@ -4408,7 +4408,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <label className="font-bold text-slate-700 block mb-1">Tải ảnh mới từ máy tính (Tự động nén):</label>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                         onChange={handleInfographicFileUpload}
                         className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200 cursor-pointer"
                       />
@@ -4710,7 +4710,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span>{isUploadingLogo ? 'Đang tải lên Cloud...' : 'Chọn tệp Logo...'}</span>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                             onChange={handleSchoolLogoUpload}
                             disabled={isUploadingLogo}
                             className="hidden"
@@ -4811,7 +4811,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <span>{isUploadingBanner ? 'Đang tải lên Cloud Storage...' : 'Tải ảnh từ máy tính lên Firebase Storage...'}</span>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                         onChange={handleHeroBannerUpload}
                         disabled={isUploadingBanner}
                         className="hidden"

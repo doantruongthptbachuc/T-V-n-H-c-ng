@@ -678,7 +678,7 @@ export const ActivitiesSection: React.FC<ActivitiesSectionProps> = ({
                       <span>{isCompressingEditImage ? 'Đang nén ảnh...' : 'Tải ảnh mới từ máy tính (Tự động nén)'}</span>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                         onChange={handleEditImageFile}
                         className="hidden"
                         disabled={isCompressingEditImage}
@@ -920,7 +920,7 @@ export const ActivitiesSection: React.FC<ActivitiesSectionProps> = ({
                       <span>{isCompressingNewImage ? 'Đang nén ảnh...' : 'Chọn file từ máy tính'}</span>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                         onChange={handleImageFile}
                         className="hidden"
                         disabled={isCompressingNewImage}

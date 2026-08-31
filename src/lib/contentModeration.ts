@@ -212,14 +212,14 @@ export async function validateImageFile(file: File): Promise<{
   }
 
   // 2. Kiểm tra phần mở rộng tệp (File Extension)
-  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.pjg', '.pjpeg', '.jfif', '.webp', '.gif'];
   const fileName = file.name.toLowerCase();
   const hasValidExt = allowedExtensions.some(ext => fileName.endsWith(ext));
 
   if (!hasValidExt) {
     return {
       isValid: false,
-      reason: 'Định dạng tệp không được hỗ trợ. Chỉ chấp nhận các tệp ảnh: .JPG, .JPEG, .PNG, .WEBP, .GIF'
+      reason: 'Định dạng tệp không được hỗ trợ. Chỉ chấp nhận các tệp ảnh: .PNG, .PJG, .JPG, .JPEG, .WEBP, .GIF'
     };
   }
 
@@ -232,12 +232,22 @@ export async function validateImageFile(file: File): Promise<{
     };
   }
 
-  // 3. Kiểm tra MIME Type
-  const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-  if (!allowedMimeTypes.includes(file.type)) {
+  // 3. Kiểm tra MIME Type (nếu trình duyệt xác định được)
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/pjpeg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'image/pjg',
+    'image/x-png',
+    'application/octet-stream',
+    ''
+  ];
+  if (file.type && !allowedMimeTypes.includes(file.type.toLowerCase())) {
     return {
       isValid: false,
-      reason: 'Loại MIME của tệp không hợp lệ. Vui lòng chọn tệp ảnh thực sự.'
+      reason: 'Loại MIME của tệp không hợp lệ. Vui lòng chọn tệp ảnh thực sự (.PNG, .PJG, .JPG, .WEBP).'
     };
   }
 
@@ -246,8 +256,8 @@ export async function validateImageFile(file: File): Promise<{
     const buffer = await file.slice(0, 8).arrayBuffer();
     const bytes = new Uint8Array(buffer);
 
-    // JPEG: FF D8 FF
-    const isJpeg = bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF;
+    // JPEG / JFIF / Progressive JPEG / PJG: FF D8 (thường là FF D8 FF)
+    const isJpeg = bytes[0] === 0xFF && bytes[1] === 0xD8;
     // PNG: 89 50 4E 47 0D 0A 1A 0A
     const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47;
     // GIF: 47 49 46 38
@@ -258,7 +268,7 @@ export async function validateImageFile(file: File): Promise<{
     if (!isJpeg && !isPng && !isGif && !isWebp) {
       return {
         isValid: false,
-        reason: '🚫 CẢNH BÁO: Chữ ký nhị phân của tệp không khớp với cấu trúc ảnh tiêu chuẩn. Tệp bị chặn vì lý do bảo mật.'
+        reason: '🚫 CẢNH BÁO: Chữ ký nhị phân của tệp không khớp với cấu trúc ảnh tiêu chuẩn (.PNG, .PJG, .JPG, .WEBP). Tệp bị chặn vì lý do bảo mật.'
       };
     }
   } catch (err) {

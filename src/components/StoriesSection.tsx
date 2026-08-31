@@ -705,7 +705,7 @@ export const StoriesSection: React.FC<StoriesSectionProps> = ({
                         <span>{isCompressingEditImage ? 'Đang xử lý ảnh...' : 'Tải ảnh mới từ máy'}</span>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                           onChange={handleEditImageUpload}
                           disabled={isCompressingEditImage}
                           className="hidden"
@@ -952,7 +952,7 @@ export const StoriesSection: React.FC<StoriesSectionProps> = ({
                           <span>Chọn ảnh từ máy</span>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                             onChange={handleImageUpload}
                             className="hidden"
                           />

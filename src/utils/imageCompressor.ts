@@ -13,6 +13,14 @@ export function compressImageToDataUrl(
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (readerEvent) => {
+      let rawResult = (readerEvent.target?.result as string) || '';
+      
+      // Nếu trình duyệt gán MIME type chung chung cho .pjg hoặc ảnh không chuẩn (application/octet-stream hoặc data:;), chuẩn hóa để Image() tải mượt mà
+      if (rawResult.startsWith('data:application/octet-stream') || rawResult.startsWith('data:;base64')) {
+        const isPng = file.name.toLowerCase().endsWith('.png');
+        rawResult = rawResult.replace(/^data:[^;]*/, isPng ? 'data:image/png' : 'data:image/jpeg');
+      }
+
       const img = new Image();
       img.onload = () => {
         let width = img.width;
@@ -31,7 +39,7 @@ export function compressImageToDataUrl(
 
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve((readerEvent.target?.result as string) || '');
+          resolve(rawResult);
           return;
         }
 
@@ -55,10 +63,10 @@ export function compressImageToDataUrl(
       };
 
       img.onerror = () => {
-        resolve((readerEvent.target?.result as string) || '');
+        resolve(rawResult);
       };
 
-      img.src = readerEvent.target?.result as string;
+      img.src = rawResult;
     };
 
     reader.onerror = (err) => reject(err);

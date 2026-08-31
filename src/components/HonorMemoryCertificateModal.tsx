@@ -333,7 +333,7 @@ export const HonorMemoryCertificateModal: React.FC<HonorMemoryCertificateModalPr
           type="file"
           ref={fileInputRef}
           onChange={handlePhotoUpload}
-          accept="image/*"
+          accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
           className="hidden"
         />
 

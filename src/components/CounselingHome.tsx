@@ -317,7 +317,7 @@ export const CounselingHome: React.FC<CounselingHomeProps> = ({
                         <span>{isUploadingAvatar ? 'Đang nén ảnh...' : 'Tải ảnh từ máy'}</span>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                           onChange={handleAvatarUpload}
                           className="hidden"
                           disabled={isUploadingAvatar}

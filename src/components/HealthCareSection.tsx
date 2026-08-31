@@ -1197,7 +1197,7 @@ Mô tả chi tiết nguyên nhân và nguy cơ đối với sức khỏe học s
                     <span>{isUploading ? 'Đang nén ảnh...' : 'Tải ảnh lên'}</span>
                     <input 
                       type="file" 
-                      accept="image/*" 
+                      accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif" 
                       onChange={handleImageUpload} 
                       className="hidden" 
                     />
@@ -1408,7 +1408,7 @@ Mô tả chi tiết nguyên nhân và nguy cơ đối với sức khỏe học s
                     <span>{isCompressingArtImg ? 'Đang nén ảnh...' : 'Tải ảnh từ máy'}</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                       onChange={handleArticleImageUpload}
                       className="hidden"
                     />

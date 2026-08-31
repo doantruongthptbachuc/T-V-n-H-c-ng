@@ -430,7 +430,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                   <span>{isUploading ? 'Đang tải ảnh...' : '+ Chọn file ảnh mới từ thiết bị'}</span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                     onChange={handleBannerUpload}
                     className="hidden"
                     disabled={isUploading}

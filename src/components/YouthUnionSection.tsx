@@ -1148,7 +1148,7 @@ export const YouthUnionSection: React.FC<YouthUnionSectionProps> = ({
                             <span>{isCompressingRegAvatar ? 'Đang nén ảnh...' : regAvatar ? 'Đổi ảnh khác' : 'Chọn ảnh chân dung'}</span>
                             <input
                               type="file"
-                              accept="image/*"
+                              accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                               className="hidden"
                               onChange={handleRegAvatarUpload}
                             />
@@ -3132,7 +3132,7 @@ export const YouthUnionSection: React.FC<YouthUnionSectionProps> = ({
                     <span>{isCompressingMemberAvatar ? 'Đang nén ảnh...' : 'Chọn ảnh mới từ máy tính'}</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                       onChange={handleMemberAvatarUpload}
                       className="hidden"
                       disabled={isCompressingMemberAvatar}
@@ -3494,7 +3494,7 @@ export const YouthUnionSection: React.FC<YouthUnionSectionProps> = ({
                     <span>{isCompressingHonor ? 'Đang nén ảnh...' : 'Tải ảnh từ máy tính'}</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                       onChange={handleHonorPhotoUpload}
                       className="hidden"
                       disabled={isCompressingHonor}

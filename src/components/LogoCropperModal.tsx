@@ -363,7 +363,7 @@ export const LogoCropperModal: React.FC<LogoCropperModalProps> = ({
                 <span>Tải ảnh khác từ máy tính lên để xén...</span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.png,.pjg,.jpg,.jpeg,.jfif,.webp,.gif"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
