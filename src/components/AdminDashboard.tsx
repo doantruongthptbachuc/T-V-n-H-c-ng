@@ -4796,7 +4796,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             editConfig.schoolLogo === logo ? 'border-indigo-600 ring-2 ring-indigo-500/30' : 'border-slate-200 hover:border-slate-300'
                           }`}
                         >
-                          <img src={logo} alt="Preset Logo" className="w-full h-full object-cover" />
+                          <img src={typeof logo === 'string' ? logo : logo.src} alt="Preset Logo" className="w-full h-full object-cover" />
                         </button>
                       ))}
                     </div>
