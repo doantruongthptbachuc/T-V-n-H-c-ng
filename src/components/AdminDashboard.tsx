@@ -4786,7 +4786,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => setEditConfig({ ...editConfig, schoolLogo: logo })}
+                         onClick={() =>
+  setEditConfig({
+    ...editConfig,
+    schoolLogo: typeof logo === 'string' ? logo : logo.src,
+  })
+}
                           className={`w-10 h-10 rounded-xl border-2 overflow-hidden cursor-pointer transition ${
                             editConfig.schoolLogo === logo ? 'border-indigo-600 ring-2 ring-indigo-500/30' : 'border-slate-200 hover:border-slate-300'
                           }`}
