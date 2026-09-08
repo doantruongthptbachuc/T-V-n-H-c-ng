@@ -4751,7 +4751,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <LogoCropperModal
                     isOpen={isLogoCropperOpen}
                     onClose={() => setIsLogoCropperOpen(false)}
-                    initialImage={editConfig.schoolLogo || sampleSchoolLogos[0].src}
+                    initialImage={
+  editConfig.schoolLogo ||
+  (typeof sampleSchoolLogos[0] === 'string'
+    ? sampleSchoolLogos[0]
+    : sampleSchoolLogos[0].src)
+}
                     schoolName={editConfig.schoolName}
                     onSaveLogo={(croppedDataUrl) => {
                       const updated = { ...editConfig, schoolLogo: croppedDataUrl };
