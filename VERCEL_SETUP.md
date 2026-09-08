@@ -56,3 +56,4 @@ Phiên bản cũ tạo `tvhd_system_backup_auto` chứa gần như toàn bộ d�
 ## 7. Lưu ý
 
 `server-data.json` và `server.ts` có thể giữ lại làm bản sao/rollback, nhưng không còn được dùng làm database chính trên Vercel.
+Vercel Preview Deployment - 2026
