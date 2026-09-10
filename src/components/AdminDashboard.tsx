@@ -4751,7 +4751,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <LogoCropperModal
                     isOpen={isLogoCropperOpen}
                     onClose={() => setIsLogoCropperOpen(false)}
-                    initialImage={editConfig.schoolLogo || sampleSchoolLogos[0]}
+                    initialImage={
+  editConfig.schoolLogo ||
+  (typeof sampleSchoolLogos[0] === 'string'
+    ? sampleSchoolLogos[0]
+    : sampleSchoolLogos[0].src)
+}
                     schoolName={editConfig.schoolName}
                     onSaveLogo={(croppedDataUrl) => {
                       const updated = { ...editConfig, schoolLogo: croppedDataUrl };
@@ -4781,12 +4786,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => setEditConfig({ ...editConfig, schoolLogo: logo })}
+                         onClick={() =>
+  setEditConfig({
+    ...editConfig,
+    schoolLogo: typeof logo === 'string' ? logo : logo.src,
+  })
+}
                           className={`w-10 h-10 rounded-xl border-2 overflow-hidden cursor-pointer transition ${
                             editConfig.schoolLogo === logo ? 'border-indigo-600 ring-2 ring-indigo-500/30' : 'border-slate-200 hover:border-slate-300'
                           }`}
                         >
-                          <img src={logo} alt="Preset Logo" className="w-full h-full object-cover" />
+                          <img src={typeof logo === 'string' ? logo : logo.src} alt="Preset Logo" className="w-full h-full object-cover" />
                         </button>
                       ))}
                     </div>

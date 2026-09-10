@@ -27,7 +27,7 @@ export const initialConfig: SchoolConfig = {
   schoolName: 'TRƯỜNG THPT BA CHÚC',
   schoolSubName: 'ĐOÀN THANH NIÊN - TỔ TƯ VẤN HỌC ĐƯỜNG',
   slogan: 'Lắng nghe – Thấu hiểu – Đồng hành – Phát triển',
-  schoolLogo: schoolLogoImg,
+ schoolLogo: typeof schoolLogoImg === 'string' ? schoolLogoImg : schoolLogoImg.src,
   heroBannerImage: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1200&auto=format&fit=crop&q=80',
   heroBannerImages: sampleHeroBannerImages,
   hotline: '0789 620 212',
