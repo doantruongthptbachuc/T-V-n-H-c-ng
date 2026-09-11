@@ -1,0 +1,56 @@
+name: Fix story image persistence
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ !startsWith(github.event.head_commit.message, 'fix: persist story image') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch story image upload and persistence
+        shell: python
+        run: |
+          from pathlib import Path
+
+          admin = Path('src/components/AdminDashboard.tsx')
+          text = admin.read_text(encoding='utf-8')
+          old = """        const compressed = await compressImageFile(file, 900, 700, 0.85);\n        setSEditImage(compressed);"""
+          new = """        const cloudUrl = await uploadImageToFirebase(file, 'images/stories');\n        setSEditImage(cloudUrl);"""
+          if old not in text:
+              raise SystemExit('AdminDashboard story image upload block not found')
+          text = text.replace(old, new, 1)
+          admin.write_text(text, encoding='utf-8')
+
+          app = Path('src/App.tsx')
+          text = app.read_text(encoding='utf-8')
+          old_import = """import {\n  subscribeToFirebaseConfig,\n  subscribeToFirebaseCounselors,\n  subscribeToFirebaseCollection\n} from './lib/firestoreService';"""
+          new_import = """import {\n  subscribeToFirebaseConfig,\n  subscribeToFirebaseCounselors,\n  subscribeToFirebaseCollection,\n  saveFirebaseDoc\n} from './lib/firestoreService';"""
+          if old_import not in text:
+              raise SystemExit('App firestore import block not found')
+          text = text.replace(old_import, new_import, 1)
+
+          old_handler = """  const handleUpdateStory = (id: string, updates: Partial<Story>) => {\n    const updated = stories.map((s) => (s.id === id ? { ...s, ...updates } : s));\n    setStories(updated);\n    saveStories(updated);\n  };"""
+          new_handler = """  const handleUpdateStory = async (id: string, updates: Partial<Story>) => {\n    const updated = stories.map((s) => (s.id === id ? { ...s, ...updates } : s));\n    setStories(updated);\n    saveStories(updated);\n\n    // Persist the edited story to Firestore so image/content changes survive reloads\n    // and remain synchronized across devices.\n    const updatedStory = updated.find((s) => s.id === id);\n    if (updatedStory) {\n      try {\n        await saveFirebaseDoc('stories', updatedStory);\n      } catch (err) {\n        console.warn('Cloud story update failed; local copy remains saved:', err);\n      }\n    }\n  };"""
+          if old_handler not in text:
+              raise SystemExit('App handleUpdateStory block not found')
+          text = text.replace(old_handler, new_handler, 1)
+          app.write_text(text, encoding='utf-8')
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/AdminDashboard.tsx src/App.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: persist story image edits to cloud"
+          git push
