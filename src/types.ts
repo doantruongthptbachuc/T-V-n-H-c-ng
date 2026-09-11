@@ -73,45 +73,46 @@ export interface YouthRegistration {
   fullName: string;
   birthDate: string;
   className: string;
-  academicYear?: string; // e.g. "2025 - 2026", "2024 - 2025"
+  academicYear?: string;
   phone: string;
   email?: string;
-  avatarUrl?: string; // Ảnh đại diện học sinh
-  activities: string[]; // Công tác Đoàn, Tình nguyện, Hoa Phượng Đỏ, Văn nghệ, Thể thao, Truyền thông, Hoạt động xã hội, Câu lạc bộ
+  avatarUrl?: string;
+  activities: string[];
   skills: string;
   desires: string;
   createdAt: string;
   status: 'pending' | 'accepted' | 'approved' | 'contacted' | 'assigned' | 'rejected';
-  isLeader?: boolean; // Cờ thủ lĩnh 🚩
-  leaderRole?: string; // e.g. "Bí thư Chi đoàn", "Đội trưởng Xung kích", "Thủ lĩnh Thanh niên"
+  isLeader?: boolean;
+  leaderRole?: string;
   assignedClub?: string;
   notes?: string;
 }
 
 export type VolunteerStatus = 
-  | 'active'                       // Đang hoạt động tích cực
-  | 'graduated_12'                // Đã hoàn thành lớp 12 / Tốt nghiệp
-  | 'inactive_rules_violation'     // Không nghiêm túc trong phong trào tình nguyện
-  | 'inactive_low_performance'     // Sức học giảm sút (tạm dừng để tập trung học tập)
-  | 'honored';                     // Được vinh danh xuất sắc
+  | 'active'
+  | 'graduated_12'
+  | 'inactive_rules_violation'
+  | 'inactive_low_performance'
+  | 'honored';
 
 export interface VolunteerMember {
   id: string;
   code: string;
   fullName: string;
   className: string;
-  academicYear?: string; // e.g. "2025 - 2026"
+  academicYear?: string;
   phone: string;
   email?: string;
   joinedDate: string;
   avatarUrl?: string;
   skills: string;
-  activitiesCount: number; // Số lần tham gia phong trào tình nguyện
+  activitiesCount: number;
+  activityPoints?: number;
   status: VolunteerStatus;
   statusReason?: string;
-  isLeader?: boolean; // Cờ thủ lĩnh 🚩
-  leaderRole?: string; // e.g. "Đội trưởng Đội Tình nguyện"
-  isHonored?: boolean;     // Được vinh danh học sinh tích cực
+  isLeader?: boolean;
+  leaderRole?: string;
+  isHonored?: boolean;
   honorTitle?: string;
   honorDate?: string;
   honorPhoto?: string;
@@ -126,7 +127,8 @@ export interface VolunteerAttendance {
   activityName: string;
   date: string;
   location?: string;
-  timesParticipated: number; // Số lần đã tham gia tính đến hiện tại
+  timesParticipated: number;
+  activityPoints?: number;
   createdAt: string;
   notes?: string;
   counselorVerified?: boolean;
@@ -163,9 +165,9 @@ export interface Activity {
     fired?: boolean;
     cared?: boolean;
   };
-  articleUrl?: string; // Đường dẫn bài viết chi tiết / tài liệu / Kế hoạch
-  content?: string; // Toàn văn bài viết hướng dẫn / kế hoạch chi tiết
-  actionSteps?: string[]; // Các bước tham gia / thực hiện
+  articleUrl?: string;
+  content?: string;
+  actionSteps?: string[];
 }
 
 export interface QAInfographic {
@@ -176,11 +178,11 @@ export interface QAInfographic {
   description: string;
   uploadDate: string;
   author: string;
-  articleUrl?: string; // Đường dẫn bài viết chi tiết / tài liệu nguồn chính thức
-  content?: string; // Toàn văn bài viết hướng dẫn & giải thích infographic
-  actionSteps?: string[]; // Danh sách các bước thực hiện / hành động cụ thể
-  keyTakeaways?: string[]; // Điểm then chốt cần ghi nhớ
-  downloadUrl?: string; // Link tải ảnh gốc chất lượng cao / PDF
+  articleUrl?: string;
+  content?: string;
+  actionSteps?: string[];
+  keyTakeaways?: string[];
+  downloadUrl?: string;
 }
 
 export type HealthArticleCategory =
@@ -197,9 +199,9 @@ export interface HealthArticle {
   code?: string;
   title: string;
   category: HealthArticleCategory | string;
-  readTime: string; // e.g. "3 phút đọc"
+  readTime: string;
   badgeColor?: string;
-  iconName?: string; // e.g. "Activity", "Apple", "Stethoscope", "HeartPulse", "ShieldCheck", "Zap"
+  iconName?: string;
   summary: string;
   content: string;
   tips: string[];
@@ -222,9 +224,9 @@ export interface ChatMessage {
 export interface AIPromptQuestion {
   id: string;
   promptText: string;
-  answer?: string; // Định hướng / Câu trả lời chuẩn của Nhà trường để AI trả lời đúng ý, không gây hoang mang
+  answer?: string;
   category: TopicType | 'Tất cả';
-  timePeriod: string; // e.g., 'Toàn thời gian', 'Mùa thi học kỳ & TN THPT', 'Đầu năm học mới', 'Mùa tuyển sinh & hướng nghiệp', 'Chiến dịch hè & Đoàn - Hội'
+  timePeriod: string;
   startDate?: string;
   endDate?: string;
   isActive: boolean;
@@ -247,7 +249,7 @@ export interface SchoolConfig {
   slogan?: string;
   schoolLogo: string;
   heroBannerImage?: string;
-  heroBannerImages?: string[]; // Multiple photos (approx 7 photos) for Safe Space Auto Carousel
+  heroBannerImages?: string[];
   hotline: string;
   email: string;
   facebookUrl: string;
@@ -265,7 +267,7 @@ export interface SchoolConfig {
 export interface Counselor {
   id: string;
   name: string;
-  role: string; // e.g. "BT Đoàn", "PBT Đoàn", "Tổ trưởng Tổ GDKT&PL - Địa lý"
+  role: string;
   specialty: string;
   avatar: string;
   phone?: string;
