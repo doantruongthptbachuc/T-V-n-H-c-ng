@@ -1,0 +1,152 @@
+name: Fix story image upload, edit and crop v2
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ !startsWith(github.event.head_commit.message, 'fix: story images v2') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch story image handling
+        shell: python
+        run: |
+          from pathlib import Path
+
+          # 1) Add a strict Firebase Storage uploader so story images are never
+          # silently converted into huge Base64 strings in Firestore.
+          storage = Path('src/lib/storageService.ts')
+          text = storage.read_text(encoding='utf-8')
+          marker = "\n/**\n * Xóa file ảnh cũ khỏi Firebase Storage"
+          if 'uploadImageToFirebaseStrict' not in text:
+              insert = r'''
+
+/**
+ * Upload ảnh bắt buộc lên Firebase Storage.
+ * Không fallback sang Base64 để tránh làm Firestore phình to và mất ảnh sau khi reload.
+ */
+export async function uploadImageToFirebaseStrict(
+  file: File | Blob,
+  folder: UploadFolder | string = 'images/uploads',
+  customName?: string
+): Promise<string> {
+  if (!storage) {
+    throw new Error('Firebase Storage chưa được khởi tạo');
+  }
+
+  const timestamp = Date.now();
+  const randomStr = Math.random().toString(36).substring(2, 8);
+  const cleanName = customName
+    ? `${timestamp}_${customName.replace(/[^a-zA-Z0-9._-]/g, '_')}.jpg`
+    : `${timestamp}_${randomStr}.jpg`;
+
+  const storageRef = ref(storage, `${folder}/${cleanName}`);
+  const metadata = {
+    contentType: 'image/jpeg',
+    cacheControl: 'public, max-age=31536000',
+  };
+
+  const snapshot = await uploadBytes(storageRef, file, metadata);
+  return await getDownloadURL(snapshot.ref);
+}
+'''
+              if marker not in text:
+                  raise SystemExit('storage insertion marker not found')
+              text = text.replace(marker, insert + marker, 1)
+              storage.write_text(text, encoding='utf-8')
+
+          # 2) Add optional center-cropping to the shared image compressor.
+          comp = Path('src/utils/imageCompressor.ts')
+          text = comp.read_text(encoding='utf-8')
+          text = text.replace(
+              "  quality = 0.82\n): Promise<string> {",
+              "  quality = 0.82,\n  cropAspectRatio?: number\n): Promise<string> {",
+              1
+          )
+          old_draw = """        // Tăng độ mượt cho ảnh khi thu nhỏ\n        ctx.imageSmoothingEnabled = true;\n        ctx.imageSmoothingQuality = 'high';\n        ctx.drawImage(img, 0, 0, width, height);"""
+          new_draw = """        // Xén giữa ảnh theo đúng tỉ lệ khung nếu được yêu cầu.\n        // Ví dụ 4/3 giúp ảnh tâm sự vừa khung, không bị méo hoặc kéo giãn.\n        let sourceX = 0;\n        let sourceY = 0;\n        let sourceWidth = img.width;\n        let sourceHeight = img.height;\n        if (cropAspectRatio && cropAspectRatio > 0) {\n          const sourceRatio = img.width / img.height;\n          if (sourceRatio > cropAspectRatio) {\n            sourceWidth = Math.round(img.height * cropAspectRatio);\n            sourceX = Math.round((img.width - sourceWidth) / 2);\n          } else if (sourceRatio < cropAspectRatio) {\n            sourceHeight = Math.round(img.width / cropAspectRatio);\n            sourceY = Math.round((img.height - sourceHeight) / 2);\n          }\n        }\n\n        // Tăng độ mượt cho ảnh khi thu nhỏ\n        ctx.imageSmoothingEnabled = true;\n        ctx.imageSmoothingQuality = 'high';\n        ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);"""
+          if old_draw not in text:
+              raise SystemExit('image compressor draw block not found')
+          text = text.replace(old_draw, new_draw, 1)
+          comp.write_text(text, encoding='utf-8')
+
+          # 3) StoriesSection: new uploads and admin replacement uploads are cropped
+          # to 4:3 and stored permanently in Firebase Storage.
+          stories = Path('src/components/StoriesSection.tsx')
+          text = stories.read_text(encoding='utf-8')
+          if "uploadImageToFirebaseStrict" not in text:
+              text = text.replace(
+                  "import { compressImageFile } from '../utils/imageCompressor';",
+                  "import { compressImageFile, compressImageToDataUrl } from '../utils/imageCompressor';\nimport { uploadImageToFirebaseStrict } from '../lib/storageService';",
+                  1
+              )
+
+          old_new_upload = """        const compressed = await compressImageFile(file, 800, 600, 0.82);\n        setImagePreview(compressed);"""
+          new_new_upload = """        const cropped = await compressImageToDataUrl(file, 1200, 900, 0.86, 4 / 3);\n        const blob = await (await fetch(cropped)).blob();\n        const cloudUrl = await uploadImageToFirebaseStrict(blob, 'images/stories');\n        setImagePreview(cloudUrl);"""
+          if old_new_upload in text:
+              text = text.replace(old_new_upload, new_new_upload, 1)
+
+          old_edit_upload = """        const compressed = await compressImageFile(file, 900, 700, 0.85);\n        setEditImage(compressed);"""
+          new_edit_upload = """        const cropped = await compressImageToDataUrl(file, 1200, 900, 0.86, 4 / 3);\n        const blob = await (await fetch(cropped)).blob();\n        const cloudUrl = await uploadImageToFirebaseStrict(blob, 'images/stories');\n        setEditImage(cloudUrl);"""
+          if old_edit_upload in text:
+              text = text.replace(old_edit_upload, new_edit_upload, 1)
+          stories.write_text(text, encoding='utf-8')
+
+          # 4) AdminDashboard: replacement image also goes to Storage and is cropped 4:3.
+          admin = Path('src/components/AdminDashboard.tsx')
+          text = admin.read_text(encoding='utf-8')
+          if "uploadImageToFirebaseStrict" not in text:
+              text = text.replace(
+                  "import { uploadImageToFirebase, deleteImageFromFirebase } from '../lib/storageService';",
+                  "import { uploadImageToFirebase, uploadImageToFirebaseStrict, deleteImageFromFirebase } from '../lib/storageService';",
+                  1
+              )
+          else:
+              text = text.replace(
+                  "import { uploadImageToFirebase, deleteImageFromFirebase } from '../lib/storageService';",
+                  "import { uploadImageToFirebase, uploadImageToFirebaseStrict, deleteImageFromFirebase } from '../lib/storageService';",
+                  1
+              )
+          if "compressImageToDataUrl" not in text:
+              text = text.replace(
+                  "import { compressImageFile } from '../utils/imageCompressor';",
+                  "import { compressImageFile, compressImageToDataUrl } from '../utils/imageCompressor';",
+                  1
+              )
+          old_admin_upload = """        const compressed = await compressImageFile(file, 900, 700, 0.85);\n        setSEditImage(compressed);"""
+          new_admin_upload = """        const cropped = await compressImageToDataUrl(file, 1200, 900, 0.86, 4 / 3);\n        const blob = await (await fetch(cropped)).blob();\n        const cloudUrl = await uploadImageToFirebaseStrict(blob, 'images/stories');\n        setSEditImage(cloudUrl);"""
+          if old_admin_upload in text:
+              text = text.replace(old_admin_upload, new_admin_upload, 1)
+          admin.write_text(text, encoding='utf-8')
+
+          # 5) Persist every edited story to Firestore in App.tsx.
+          app = Path('src/App.tsx')
+          text = app.read_text(encoding='utf-8')
+          old_import = """import {\n  subscribeToFirebaseConfig,\n  subscribeToFirebaseCounselors,\n  subscribeToFirebaseCollection\n} from './lib/firestoreService';"""
+          new_import = """import {\n  subscribeToFirebaseConfig,\n  subscribeToFirebaseCounselors,\n  subscribeToFirebaseCollection,\n  saveFirebaseDoc\n} from './lib/firestoreService';"""
+          if old_import in text:
+              text = text.replace(old_import, new_import, 1)
+
+          old_handler = """  const handleUpdateStory = (id: string, updates: Partial<Story>) => {\n    const updated = stories.map((s) => (s.id === id ? { ...s, ...updates } : s));\n    setStories(updated);\n    saveStories(updated);\n  };"""
+          new_handler = """  const handleUpdateStory = async (id: string, updates: Partial<Story>) => {\n    const updated = stories.map((s) => (s.id === id ? { ...s, ...updates } : s));\n    setStories(updated);\n    saveStories(updated);\n\n    const updatedStory = updated.find((s) => s.id === id);\n    if (updatedStory) {\n      try {\n        await saveFirebaseDoc('stories', updatedStory);\n      } catch (err) {\n        console.error('Không thể lưu bài viết lên Firebase:', err);\n        alert('Không thể lưu thay đổi bài viết lên máy chủ. Vui lòng kiểm tra kết nối Firebase và thử lại.');\n      }\n    }\n  };"""
+          if old_handler in text:
+              text = text.replace(old_handler, new_handler, 1)
+          app.write_text(text, encoding='utf-8')
+
+      - name: Commit patched code
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/storageService.ts src/utils/imageCompressor.ts src/components/StoriesSection.tsx src/components/AdminDashboard.tsx src/App.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: story images v2"
+          git push
