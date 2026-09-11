@@ -14,6 +14,8 @@ import {
 
 import {
   getAuth,
+  setPersistence,
+  browserLocalPersistence,
 } from 'firebase/auth';
 
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -50,5 +52,16 @@ export const storage = getStorage(app);
 // ==========================================
 
 export const auth = getAuth(app);
+
+// Luôn dùng local persistence cho tài khoản quản trị.
+// Điều này giúp phiên Firebase không bị mất khi F5, chuyển tab,
+// đóng/mở trình duyệt hoặc Vercel tạo một deployment mới.
+export const authPersistenceReady = setPersistence(
+  auth,
+  browserLocalPersistence
+).catch((error) => {
+  console.warn('[Firebase Auth] Không thể bật browserLocalPersistence:', error);
+  return undefined;
+});
 
 export default app;
