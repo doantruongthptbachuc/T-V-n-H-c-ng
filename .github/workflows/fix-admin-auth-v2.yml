@@ -1,0 +1,56 @@
+name: Fix admin authentication persistence
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ !startsWith(github.event.head_commit.message, 'fix: admin auth v2') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch auth service
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('src/lib/authService.ts')
+          text = p.read_text(encoding='utf-8')
+
+          # Import the persistence-ready promise without changing any login credentials.
+          old = "import { auth, db } from './firebase';"
+          new = "import { auth, db, authPersistenceReady } from './firebase';"
+          if old in text and 'authPersistenceReady' not in text:
+              text = text.replace(old, new, 1)
+
+          # Wait for local persistence before Firebase sign-in. This removes the race
+          # where a successful login is followed by a transient signed-out state.
+          old = "    // Đồng bộ tài khoản Firebase Authentication và Firestore trong nền (Non-blocking)\n    (async () => {"
+          new = "    // Đồng bộ Firebase sau khi persistence đã sẵn sàng.\n    (async () => {\n      try { await authPersistenceReady; } catch {}"
+          if old in text:
+              text = text.replace(old, new, 1)
+
+          # Also ensure the normal Firebase login path waits for persistence.
+          old = "  // 6. SLOW PATH: Thử xác thực trực tiếp qua Firebase Authentication nếu là tài khoản tùy biến khác\n  try {\n    const credential = await signInWithEmailAndPassword(auth, emailToTry, cleanPass);"
+          new = "  // 6. SLOW PATH: Thử xác thực trực tiếp qua Firebase Authentication nếu là tài khoản tùy biến khác\n  try {\n    await authPersistenceReady;\n    const credential = await signInWithEmailAndPassword(auth, emailToTry, cleanPass);"
+          if old in text:
+              text = text.replace(old, new, 1)
+
+          p.write_text(text, encoding='utf-8')
+
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/authService.ts
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: admin auth v2"
+          git push
