@@ -592,55 +592,67 @@ export default function App() {
   const handleAddAttendance = (attData: Omit<VolunteerAttendance, 'id' | 'createdAt'>) => {
     const normName = normalizeStudentName(attData.fullName);
     const normClass = normalizeStudentClass(attData.className);
+    const points = Math.max(1, Number(attData.activityPoints) || 1);
 
-    const newAtt: VolunteerAttendance = {
-      ...attData,
-      fullName: attData.fullName.trim().replace(/\s+/g, ' '),
-      className: attData.className.trim(),
-      id: `att-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-    };
-    const updatedAttendance = [newAtt, ...volunteerAttendance];
+    const existingAttendanceIndex = volunteerAttendance.findIndex(a =>
+      (attData.memberId && a.memberId === attData.memberId) ||
+      (normalizeStudentName(a.fullName) === normName && normalizeStudentClass(a.className) === normClass)
+    );
+
+    let updatedAttendance: VolunteerAttendance[];
+    if (existingAttendanceIndex >= 0) {
+      const old = volunteerAttendance[existingAttendanceIndex];
+      const aggregate: VolunteerAttendance = {
+        ...old,
+        memberId: attData.memberId || old.memberId,
+        fullName: attData.fullName.trim().replace(/\s+/g, ' '),
+        className: attData.className.trim(),
+        activityName: attData.activityName,
+        date: attData.date,
+        location: attData.location,
+        timesParticipated: (Number(old.timesParticipated) || 0) + 1,
+        activityPoints: (Number(old.activityPoints) || 0) + points,
+        notes: attData.notes ?? old.notes,
+        counselorVerified: attData.counselorVerified ?? old.counselorVerified,
+      };
+      updatedAttendance = volunteerAttendance.map((item,i) => i === existingAttendanceIndex ? aggregate : item);
+    } else {
+      const newAtt: VolunteerAttendance = {
+        ...attData,
+        fullName: attData.fullName.trim().replace(/\s+/g, ' '),
+        className: attData.className.trim(),
+        timesParticipated: 1,
+        activityPoints: points,
+        id: `att-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      };
+      updatedAttendance = [newAtt, ...volunteerAttendance];
+    }
+
     setVolunteerAttendance(updatedAttendance);
     saveVolunteerAttendance(updatedAttendance);
 
-    // Calculate actual total attendances for this student from the updated attendance list
-    const totalAttCount = updatedAttendance.filter(
-      a => normalizeStudentName(a.fullName) === normName && normalizeStudentClass(a.className) === normClass
-    ).length;
-
-    // Find member by normalized name and class
-    const existingIndex = volunteerMembers.findIndex(
-      m => normalizeStudentName(m.fullName) === normName && normalizeStudentClass(m.className) === normClass
+    const existingMemberIndex = volunteerMembers.findIndex(m =>
+      (attData.memberId && m.id === attData.memberId) ||
+      (normalizeStudentName(m.fullName) === normName && normalizeStudentClass(m.className) === normClass)
     );
 
     let updatedMembers = [...volunteerMembers];
-    if (existingIndex !== -1) {
-      const currentMember = updatedMembers[existingIndex];
-      // Increment and ensure it's at least totalAttCount
-      const newCount = Math.max((currentMember.activitiesCount || 0) + 1, totalAttCount);
-      const shouldHonor = newCount >= 5 && !currentMember.isHonored;
-
-      // Update primary member and consolidate any duplicate profiles of this student
-      const primaryUpdated = {
-        ...currentMember,
+    if (existingMemberIndex >= 0) {
+      const old = updatedMembers[existingMemberIndex];
+      const newCount = (Number(old.activitiesCount) || 0) + 1;
+      const newPoints = (Number(old.activityPoints) || 0) + points;
+      updatedMembers[existingMemberIndex] = {
+        ...old,
         activitiesCount: newCount,
-        isHonored: shouldHonor ? true : currentMember.isHonored,
-        status: shouldHonor ? ('honored' as const) : currentMember.status,
-        honorTitle: shouldHonor ? (currentMember.honorTitle || 'Học Sinh Tích Cực Trong Phong Trào Tình Nguyện') : currentMember.honorTitle,
-        honorDate: shouldHonor ? (currentMember.honorDate || new Date().toLocaleDateString('vi-VN')) : currentMember.honorDate,
+        activityPoints: newPoints,
+        isHonored: old.isHonored || newCount >= 5,
+        status: (old.isHonored || newCount >= 5) ? 'honored' : old.status,
+        honorTitle: (old.isHonored || newCount >= 5) ? (old.honorTitle || 'Học Sinh Tích Cực Trong Phong Trào Tình Nguyện') : old.honorTitle,
+        honorDate: (old.isHonored || newCount >= 5) ? (old.honorDate || new Date().toLocaleDateString('vi-VN')) : old.honorDate,
       };
-
-      updatedMembers = updatedMembers
-        .filter((m, idx) => {
-          if (idx === existingIndex) return true;
-          // Filter out duplicate profiles of the same student
-          return !(normalizeStudentName(m.fullName) === normName && normalizeStudentClass(m.className) === normClass);
-        })
-        .map(m => m.id === currentMember.id ? primaryUpdated : m);
     } else {
-      // If student is not yet in volunteerMembers, auto-create their member card with 1 attendance
-      const newMember: VolunteerMember = {
+      updatedMembers.unshift({
         id: `vol-${Date.now()}`,
         code: `TN-${String(volunteerMembers.length + 1).padStart(3, '0')}`,
         fullName: attData.fullName.trim().replace(/\s+/g, ' '),
@@ -649,20 +661,17 @@ export default function App() {
         phone: '',
         joinedDate: new Date().toLocaleDateString('vi-VN'),
         skills: 'Tham gia phong trào Đoàn trường',
-        activitiesCount: Math.max(1, totalAttCount),
-        status: totalAttCount >= 5 ? 'honored' : 'active',
-        isHonored: totalAttCount >= 5,
-        honorTitle: totalAttCount >= 5 ? 'Học Sinh Tích Cực Trong Phong Trào Tình Nguyện' : undefined,
-        honorDate: totalAttCount >= 5 ? new Date().toLocaleDateString('vi-VN') : undefined,
-      };
-      updatedMembers = [newMember, ...updatedMembers];
+        activitiesCount: 1,
+        activityPoints: points,
+        status: 'active',
+        isHonored: false,
+      });
     }
 
     const { members: cleanMembers } = deduplicateAndRecomputeVolunteerMembers(updatedMembers, updatedAttendance);
     setVolunteerMembers(cleanMembers);
     saveVolunteerMembers(cleanMembers);
   };
-
   const handleHonorMember = (id: string, title: string, photo?: string) => {
     const updatedMembers = volunteerMembers.map(m => m.id === id ? {
       ...m,
