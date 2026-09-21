@@ -788,27 +788,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleQuickIncrementAttendance = (m: VolunteerMember) => {
-    if (!onUpdateVolunteerMember) return;
-    const newCount = (m.activitiesCount || 0) + 1;
-    const shouldHonor = newCount >= 5 && !m.isHonored;
-    onUpdateVolunteerMember(m.id, {
-      activitiesCount: newCount,
-      isHonored: shouldHonor ? true : m.isHonored,
-      status: shouldHonor ? ('honored' as const) : m.status,
-      honorTitle: shouldHonor ? 'Học Sinh Tích Cực Trong Phong Trào Tình Nguyện' : m.honorTitle,
-      honorDate: shouldHonor ? new Date().toLocaleDateString('vi-VN') : m.honorDate,
+    if (!onAddAttendance) return;
+    const raw = window.prompt('Số điểm cộng cho hoạt động này (1, 2, 3, 5...)', '1');
+    if (raw === null) return;
+    const points = Math.max(1, Number(raw) || 1);
+    onAddAttendance({
+      memberId: m.id,
+      fullName: m.fullName,
+      className: m.className,
+      activityName: 'Hoạt động phong trào Đoàn trường',
+      date: new Date().toISOString().split('T')[0],
+      location: 'Trường THPT Ba Chúc',
+      timesParticipated: 1,
+      activityPoints: points,
+      counselorVerified: true,
     });
-    if (onAddAttendance) {
-      onAddAttendance({
-        fullName: m.fullName,
-        className: m.className,
-        activityName: 'Hoạt động phong trào Đoàn trường',
-        date: new Date().toISOString().split('T')[0],
-        location: 'Trường THPT Ba Chúc',
-        timesParticipated: newCount,
-        counselorVerified: true,
-      });
-    }
   };
 
   const handleOpenVolHonor = (m: VolunteerMember) => {
