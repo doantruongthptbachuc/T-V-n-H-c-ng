@@ -794,6 +794,8 @@ export function getAIPromptQuestions(): AIPromptQuestion[] {
 
 export function saveAIPromptQuestions(prompts: AIPromptQuestion[]): void {
   safeSet(STORAGE_KEYS.AI_PROMPTS, prompts);
+  // Firestore is the durable source of truth so edits survive F5 and other devices.
+  saveFirebaseCollectionBatch('aiPrompts', prompts).catch(err => console.warn('Lỗi lưu AI prompts Firestore:', err));
   pushCollectionToServer('aiPrompts', prompts);
   triggerAutoBackup();
 }
@@ -1353,4 +1355,3 @@ export async function upgradeAndOptimizeStorage(): Promise<{
     };
   }
 }
-
