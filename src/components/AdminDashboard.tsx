@@ -503,7 +503,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setIsUploadingAvatar(true);
       setAvatarUploadStatus({ type: 'loading', message: 'Đang tải ảnh chân dung lên Firebase Storage...' });
       try {
-        const cloudUrl = await uploadImageToFirebase(file, 'images/counselors');
+        const cropped = await new Promise<Blob>((resolve, reject) => {
+          const img = new Image();
+          const url = URL.createObjectURL(file);
+          img.onload = () => {
+            const side = Math.min(img.naturalWidth, img.naturalHeight);
+            const sx = (img.naturalWidth - side) / 2;
+            const sy = (img.naturalHeight - side) / 2;
+            const canvas = document.createElement('canvas');
+            canvas.width = 800; canvas.height = 800;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { URL.revokeObjectURL(url); reject(new Error('Canvas unavailable')); return; }
+            ctx.drawImage(img, sx, sy, side, side, 0, 0, 800, 800);
+            URL.revokeObjectURL(url);
+            canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Cannot create cropped image')), 'image/jpeg', 0.88);
+          };
+          img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Invalid image')); };
+          img.src = url;
+        });
+        const croppedFile = new File([cropped], 'avatar-cropped.jpg', { type: 'image/jpeg' });
+        const cloudUrl = await uploadImageToFirebase(croppedFile, 'images/counselors');
         setCounselorFormAvatar(cloudUrl);
         setAvatarUploadStatus({ type: 'success', message: '✅ Tải lên Firebase Storage thành công!' });
         setTimeout(() => setAvatarUploadStatus(null), 4000);
