@@ -192,30 +192,51 @@ export default function App() {
       console.warn('Persistent memory hydration note:', err);
     });
 
-    // 2. Fetch fresh cloud data across all devices
+    // 2. Fetch fresh cloud data across all devices.
+    // Throttle automatic refreshes: focus/visibility/online events can fire
+    // repeatedly while an admin is working and should not trigger a burst
+    // of Firestore reads and React state updates.
+    let lastCloudSyncAt = 0;
+    let cloudSyncPromise: Promise<void> | null = null;
+
     const performFullCloudSync = () => {
-      syncAllWithServer().then((res) => {
-        if (res.success && res.data) {
-          if (res.data.config) setConfig(res.data.config);
-          if (res.data.questions) setQuestions(res.data.questions);
-          if (res.data.stories) setStories(res.data.stories);
-          if (res.data.counselors) setCounselors(res.data.counselors);
-          if (res.data.healthArticles) setHealthArticles(res.data.healthArticles);
-          if (res.data.youthRegistrations) setRegistrations(res.data.youthRegistrations);
-          if (res.data.volunteerAttendance) setVolunteerAttendance(res.data.volunteerAttendance);
-          if (res.data.volunteerMembers) {
-            const { members: cleanMembers } = deduplicateAndRecomputeVolunteerMembers(
-              res.data.volunteerMembers,
-              res.data.volunteerAttendance || getVolunteerAttendance()
-            );
-            setVolunteerMembers(cleanMembers);
-            saveVolunteerMembers(cleanMembers);
+      const now = Date.now();
+      if (cloudSyncPromise || now - lastCloudSyncAt < 30000) {
+        return cloudSyncPromise || Promise.resolve();
+      }
+
+      lastCloudSyncAt = now;
+      cloudSyncPromise = syncAllWithServer()
+        .then((res) => {
+          if (res.success && res.data) {
+            if (res.data.config) setConfig(res.data.config);
+            if (res.data.questions) setQuestions(res.data.questions);
+            if (res.data.stories) setStories(res.data.stories);
+            if (res.data.counselors) setCounselors(res.data.counselors);
+            if (res.data.healthArticles) setHealthArticles(res.data.healthArticles);
+            if (res.data.youthRegistrations) setRegistrations(res.data.youthRegistrations);
+            if (res.data.volunteerAttendance) setVolunteerAttendance(res.data.volunteerAttendance);
+            if (res.data.volunteerMembers) {
+              const { members: cleanMembers } = deduplicateAndRecomputeVolunteerMembers(
+                res.data.volunteerMembers,
+                res.data.volunteerAttendance || getVolunteerAttendance()
+              );
+              setVolunteerMembers(cleanMembers);
+              saveVolunteerMembers(cleanMembers);
+            }
+            if (res.data.activities) setActivities(res.data.activities);
+            if (res.data.infographics) setInfographics(res.data.infographics);
+            if (res.data.aiPrompts) setAiPrompts(res.data.aiPrompts);
           }
-          if (res.data.activities) setActivities(res.data.activities);
-          if (res.data.infographics) setInfographics(res.data.infographics);
-          if (res.data.aiPrompts) setAiPrompts(res.data.aiPrompts);
-        }
-      });
+        })
+        .catch((err) => {
+          console.warn('[Cloud Sync] Tạm thời không đồng bộ được:', err);
+        })
+        .finally(() => {
+          cloudSyncPromise = null;
+        });
+
+      return cloudSyncPromise;
     };
 
     performFullCloudSync();
