@@ -19,7 +19,8 @@ import {
 import { 
   loginAdmin, 
   logoutAdmin, 
-  subscribeToAuth 
+  subscribeToAuth,
+  isLocalAdminSessionActive
 } from './lib/auth';
 
 import { 
@@ -146,9 +147,18 @@ export default function App() {
     const unsubscribe = subscribeToAuth((user, isAdmin) => {
       if (user && isAdmin) {
         setIsAdminLoggedIn(true);
-      } else {
-        setIsAdminLoggedIn(false);
+        return;
       }
+
+      // Firebase can briefly emit a signed-out state during reconnect,
+      // browser sleep/wake, or Auth initialization. If the local admin
+      // session still exists, keep the admin UI instead of ejecting the user.
+      if (isLocalAdminSessionActive()) {
+        setIsAdminLoggedIn(true);
+        return;
+      }
+
+      setIsAdminLoggedIn(false);
     });
 
     return () => unsubscribe();
