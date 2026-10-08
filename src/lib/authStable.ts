@@ -24,6 +24,8 @@ export async function loginAdmin(
 export function subscribeToAuth(
   callback: (user: any, isAdmin: boolean) => void
 ): () => void {
+  // Keep the admin UI stable during short-lived Firebase reconnects.
+  // This timer is only used when the local admin session is still present.
   let pendingLogoutTimer: ReturnType<typeof setTimeout> | null = null;
 
   return rawSubscribeToAuth((user, isAdmin) => {
@@ -37,9 +39,10 @@ export function subscribeToAuth(
       return;
     }
 
-    // Do not immediately eject an active admin because of a transient
-    // Firebase Auth state change/network reconnect. A real logout clears
-    // the local session first, so this guard will not block it.
+    // Do not eject an active admin because of a transient Firebase Auth
+    // state change, browser sleep/wake, network reconnect, or a brief
+    // Firestore/Auth initialization race. A real logout clears the local
+    // session first, so this guard will not block an intentional logout.
     if (isLocalAdminSessionActive()) {
       pendingLogoutTimer = setTimeout(() => {
         if (isLocalAdminSessionActive()) {
@@ -48,7 +51,7 @@ export function subscribeToAuth(
           callback(null, false);
         }
         pendingLogoutTimer = null;
-      }, 3000);
+      }, 15000);
       return;
     }
 
