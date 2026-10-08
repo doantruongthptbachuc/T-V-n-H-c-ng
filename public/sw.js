@@ -1,7 +1,7 @@
 // Service Worker for THPT Ba Chúc Tư Vấn Học Đường
 // Stable caching and offline support for Web & Mobile App
 
-const CACHE_VERSION = 'tvhd-pwa-v2.6.2';
+const CACHE_VERSION = 'tvhd-pwa-v2.6.3-no-html-cache';
 const CACHE_NAME = `tvhd-app-cache-${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [
@@ -68,21 +68,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML / Navigation requests: Network-First to guarantee newest published web version
+  // Never cache HTML documents. Keeping an old index/app shell can make a
+  // freshly deployed release run stale JS and appear to randomly reload or
+  // lose the current UI state. Always let Vercel serve the current document.
   if (request.mode === 'navigate' || request.destination === 'document') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
-          }
-          return response;
-        })
-        .catch(() => {
-          return caches.match(request).then((cached) => cached || caches.match('/'));
-        })
-    );
+    event.respondWith(fetch(request));
     return;
   }
 
