@@ -84,52 +84,9 @@ class RealtimeSyncManager {
    * Server-Sent Events (SSE) for multi-device real-time sync (Web ↔ Mobile Phone App)
    */
   private initEventSource(): void {
-    if (typeof window === 'undefined' || !('EventSource' in window)) return;
-
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-
-    try {
-      this.eventSource = new EventSource('/api/events');
-
-      this.eventSource.onopen = () => {
-        this.isConnected = true;
-        this.reconnectAttempts = 0;
-        this.lastSyncMessage = 'Đã liên kết dữ liệu thời gian thực giữa Web và App trên điện thoại';
-        this.notifyState();
-      };
-
-      this.eventSource.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          this.handleServerEvent(payload);
-        } catch (err) {
-          console.warn('SSE message parse error:', err);
-        }
-      };
-
-      this.eventSource.onerror = () => {
-        this.isConnected = false;
-        if (this.eventSource) {
-          this.eventSource.close();
-          this.eventSource = null;
-        }
-
-        // Exponential backoff reconnect
-        this.reconnectAttempts++;
-        const delay = Math.min(30000, 1000 * Math.pow(1.5, this.reconnectAttempts));
-        clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = setTimeout(() => {
-          this.initEventSource();
-        }, delay);
-
-        this.notifyState();
-      };
-    } catch (err) {
-      console.warn('SSE creation error:', err);
-    }
+    // This Vercel deployment is static and does not expose /api/events.
+    // Firestore onSnapshot listeners provide cross-device real-time updates.
+    this.isConnected = false;
   }
 
   /**
@@ -211,22 +168,9 @@ class RealtimeSyncManager {
    * Checks if server has newer data version and reconciles
    */
   public async checkServerVersionAndSync(): Promise<void> {
-    try {
-      const res = await fetch('/api/sync/status');
-      if (res.ok) {
-        const json = await res.json();
-        if (json?.success) {
-          this.activeConnections = json.activeConnections || 1;
-          if (json.version && json.version > this.serverVersion) {
-            this.serverVersion = json.version;
-            this.lastSyncedAt = json.lastSyncedAt || new Date().toISOString();
-            await this.performSync(false);
-          }
-        }
-      }
-    } catch {
-      // Non-fatal background check
-    }
+    // No /api/sync/status endpoint is deployed. Firestore listeners remain the
+    // source of real-time updates; avoid polling a missing route.
+    return;
   }
 
   /**
@@ -243,14 +187,8 @@ class RealtimeSyncManager {
       });
     } catch {}
 
-    // 2. Central Server broadcast to other devices (Phone <-> Web)
-    try {
-      fetch('/api/sync/broadcast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ collection, reason: 'client_mutation' }),
-      }).catch(() => {});
-    } catch {}
+    // Cross-device updates are handled by Firestore listeners. No
+    // /api/sync/broadcast route exists in this Vercel deployment.
   }
 
   /**
@@ -293,10 +231,7 @@ class RealtimeSyncManager {
    */
   public async checkForUpdates(): Promise<{ hasUpdate: boolean }> {
     try {
-      const [swUpdate, versionRes] = await Promise.all([
-        checkForServiceWorkerUpdate(),
-        fetch('/api/version').then(r => r.json()).catch(() => null),
-      ]);
+      const swUpdate = await checkForServiceWorkerUpdate();
 
       if (swUpdate) {
         this.hasAppUpdate = true;
