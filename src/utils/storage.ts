@@ -294,24 +294,44 @@ export function saveSchoolConfig(config: SchoolConfig): void {
 }
 
 // Auto Backup Helper
+// Store the aggregate backup in IndexedDB, not localStorage: the combined
+// school datasets can exceed the browser's small localStorage quota.
+// Debounce writes so a burst of save operations does not serialize the full
+// database repeatedly. The individual data stores remain untouched.
+let autoBackupTimer: ReturnType<typeof setTimeout> | null = null;
+
 export function triggerAutoBackup(): void {
-  try {
-    const backupData = {
-      backupTimestamp: new Date().toISOString(),
-      config: safeGet(STORAGE_KEYS.CONFIG, initialConfig),
-      questions: safeGet(STORAGE_KEYS.QUESTIONS, initialQuestions),
-      stories: safeGet(STORAGE_KEYS.STORIES, initialStories),
-      youthRegistrations: safeGet(STORAGE_KEYS.YOUTH_REGS, initialYouthRegistrations),
-      volunteerMembers: safeGet(STORAGE_KEYS.VOLUNTEER_MEMBERS, initialVolunteerMembers),
-      volunteerAttendance: safeGet(STORAGE_KEYS.VOLUNTEER_ATTENDANCE, initialVolunteerAttendance),
-      activities: safeGet(STORAGE_KEYS.ACTIVITIES, initialActivities),
-      infographics: safeGet(STORAGE_KEYS.INFOGRAPHICS, initialInfographics),
-      counselors: safeGet(STORAGE_KEYS.COUNSELORS, initialCounselors),
-    };
-    safeSet(STORAGE_KEYS.BACKUP, backupData);
-  } catch (err) {
-    console.warn('Auto-backup non-fatal warning:', err);
-  }
+  if (autoBackupTimer) clearTimeout(autoBackupTimer);
+
+  autoBackupTimer = setTimeout(() => {
+    autoBackupTimer = null;
+    try {
+      const backupData = {
+        backupTimestamp: new Date().toISOString(),
+        config: safeGet(STORAGE_KEYS.CONFIG, initialConfig),
+        questions: safeGet(STORAGE_KEYS.QUESTIONS, initialQuestions),
+        stories: safeGet(STORAGE_KEYS.STORIES, initialStories),
+        youthRegistrations: safeGet(STORAGE_KEYS.YOUTH_REGS, initialYouthRegistrations),
+        volunteerMembers: safeGet(STORAGE_KEYS.VOLUNTEER_MEMBERS, initialVolunteerMembers),
+        volunteerAttendance: safeGet(STORAGE_KEYS.VOLUNTEER_ATTENDANCE, initialVolunteerAttendance),
+        activities: safeGet(STORAGE_KEYS.ACTIVITIES, initialActivities),
+        infographics: safeGet(STORAGE_KEYS.INFOGRAPHICS, initialInfographics),
+        counselors: safeGet(STORAGE_KEYS.COUNSELORS, initialCounselors),
+      };
+
+      // Remove only the obsolete localStorage aggregate backup that caused
+      // quota failures; the underlying per-collection data is preserved.
+      try {
+        localStorage.removeItem(STORAGE_KEYS.BACKUP);
+      } catch {}
+
+      idbSet(STORAGE_KEYS.BACKUP, backupData).catch((err) => {
+        console.warn('[Bộ Nhớ] Không thể lưu bản sao lưu vào IndexedDB:', err);
+      });
+    } catch (err) {
+      console.warn('Auto-backup non-fatal warning:', err);
+    }
+  }, 1500);
 }
 
 // Questions
