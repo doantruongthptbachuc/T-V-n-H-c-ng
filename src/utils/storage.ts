@@ -134,14 +134,8 @@ export async function initPersistentMemory(): Promise<{ hydrated: boolean; sourc
 
 // Server & Firestore Push Helper for multi-device sync
 export async function pushCollectionToServer(collectionName: string, items: any): Promise<void> {
-  // Push to server endpoint
-  try {
-    fetch(`/api/data/${collectionName}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items }),
-    }).catch(() => {});
-  } catch {}
+  // This Vercel deployment does not expose /api/data/* server routes.
+  // Persist through Firestore below; avoid repeated 404 requests.
 
   // Sync directly to Cloud Firestore in background
   try {
@@ -210,39 +204,8 @@ export async function syncAllWithServer(): Promise<{ success: boolean; data?: an
       safeSet(STORAGE_KEYS.HEALTH_ARTICLES, resolvedHealth);
     }
 
-    // 2. Sync and reconcile with server central storage (/api/data) to ensure Web & Mobile App consistency
-    try {
-      const srvRes = await fetch('/api/data');
-      if (srvRes.ok) {
-        const srvJson = await srvRes.json();
-        if (srvJson?.success && srvJson?.data) {
-          const s = srvJson.data;
-          if (s.config && !cloudConfig) safeSet(STORAGE_KEYS.CONFIG, s.config);
-          if (Array.isArray(s.questions) && s.questions.length > 0 && (!cloudQuestions || cloudQuestions.length === 0)) {
-            safeSet(STORAGE_KEYS.QUESTIONS, s.questions);
-          }
-          if (Array.isArray(s.stories) && s.stories.length > 0 && (!cloudStories || cloudStories.length === 0)) {
-            safeSet(STORAGE_KEYS.STORIES, s.stories);
-          }
-          if (Array.isArray(s.activities) && s.activities.length > 0 && (!cloudActivities || cloudActivities.length === 0)) {
-            safeSet(STORAGE_KEYS.ACTIVITIES, s.activities);
-          }
-          if (Array.isArray(s.counselors) && s.counselors.length > 0 && (!cloudCounselors || cloudCounselors.length === 0)) {
-            safeSet(STORAGE_KEYS.COUNSELORS, s.counselors);
-          }
-          if (Array.isArray(s.healthArticles) && s.healthArticles.length > 0) {
-            const currentHealth = getHealthArticles();
-            const existingHIds = new Set(currentHealth.map(h => h.id));
-            const newHealth = s.healthArticles.filter((h: any) => !existingHIds.has(h.id));
-            if (newHealth.length > 0) {
-              safeSet(STORAGE_KEYS.HEALTH_ARTICLES, [...currentHealth, ...newHealth]);
-            }
-          }
-        }
-      }
-    } catch (srvErr) {
-      console.warn('Server storage sync fallback warning:', srvErr);
-    }
+    // Server fallback removed: this static Vercel deployment does not provide
+    // /api/data. Firestore listeners and local IndexedDB are the supported stores.
 
     return { 
       success: true, 
